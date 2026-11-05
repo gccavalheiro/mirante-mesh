@@ -19,6 +19,8 @@ import {
   type ClientMessage,
   type PeerInfo,
   type PeerPublishState,
+  type LobbyRoom,
+  type LobbySnapshot,
   type RoomId,
   type ServerMessage
 } from '../../src/shared/protocol.ts'
@@ -79,7 +81,70 @@ function normaliseRoom(raw: string): RoomId {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * Everything happening right now, for the entrance to show.
+ *
+ * Built on demand rather than maintained: the room map IS the state, and a
+ * census taken from it cannot drift from it. At this size the cost is
+ * nothing, and a cache would be one more thing that can be wrong.
+ *
+ * Empty rooms do not appear, because they do not exist — `rooms` holds a map
+ * for anyone who has ever joined, and a room nobody is standing in is an
+ * artefact of that bookkeeping, not a place.
+ */
+function lobbySnapshot(): LobbySnapshot {
+  const open: LobbyRoom[] = []
+  let people = 0
+
+  for (const [id, peers] of rooms) {
+    if (peers.size === 0) continue
+    people += peers.size
+
+    let live = false
+    let showing: string | undefined
+    let since = Number.MAX_SAFE_INTEGER
+    const inside = []
+    for (const peer of peers.values()) {
+      inside.push({ name: peer.info.name, hue: peer.info.hue })
+      if (peer.state.screen) {
+        live = true
+        // First publisher wins. With two broadcasts the entrance is not the
+        // place to disambiguate — walking in is.
+        showing ??= peer.state.screenLabel
+      }
+      if (peer.info.joinedAt < since) since = peer.info.joinedAt
+    }
+
+    open.push({ id, people: inside, live, showing, since })
+  }
+
+  // Rooms with something on screen first, then the busiest, then the oldest.
+  // Someone scanning this list is looking for something to watch before they
+  // are looking for a crowd.
+  open.sort(
+    (a, b) =>
+      Number(b.live) - Number(a.live) ||
+      b.people.length - a.people.length ||
+      a.since - b.since
+  )
+
+  return { rooms: open, people, at: Date.now() }
+}
+
 const http = createServer((req: IncomingMessage, res: ServerResponse) => {
+  // The entrance polls this before anyone has joined anything, so it is
+  // plain HTTP rather than part of the room socket — there is no room yet.
+  if (req.url === '/lobby') {
+    res.writeHead(200, {
+      'content-type': 'application/json',
+      'access-control-allow-origin': '*',
+      // Always fresh. A cached census is a census of the past, and the whole
+      // value of this is that it is now.
+      'cache-control': 'no-store'
+    })
+    res.end(JSON.stringify(lobbySnapshot()))
+    return
+  }
   if (req.url === '/health') {
     const peerCount = [...rooms.values()].reduce((n, r) => n + r.size, 0)
     res.writeHead(200, { 'content-type': 'application/json' })

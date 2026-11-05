@@ -1,6 +1,7 @@
+import { Directory } from './directory'
 import { Room } from './room'
 
-export { Room }
+export { Directory, Room }
 
 /**
  * Mirante signalling, on Cloudflare Workers.
@@ -36,6 +37,14 @@ export default {
       return Response.json({ ok: true })
     }
 
+    // What is open right now. Read by the entrance before anyone has joined
+    // anything, which is exactly why it is plain HTTP and not part of a
+    // room socket: at that moment there is no room.
+    if (url.pathname === '/lobby') {
+      const id = env.DIRECTORY.idFromName('global')
+      return env.DIRECTORY.get(id).fetch('https://directory/lobby')
+    }
+
     // ws(s)://host/room/<name>, with the name also accepted as ?room= so a
     // client can keep using a single endpoint.
     const fromPath = url.pathname.startsWith('/room/') ? url.pathname.slice(6) : ''
@@ -49,7 +58,11 @@ export default {
       )
     }
 
+    // A Durable Object cannot read the name it was addressed by, and the
+    // directory lists rooms by the name people type. So it travels.
     const id = env.ROOM.idFromName(room)
-    return env.ROOM.get(id).fetch(request)
+    const forward = new URL(request.url)
+    forward.searchParams.set('name', room)
+    return env.ROOM.get(id).fetch(new Request(forward, request))
   }
 } satisfies ExportedHandler<Env>

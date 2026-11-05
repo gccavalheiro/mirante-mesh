@@ -111,6 +111,36 @@ function registerHotkeys(): void {
   bind('CommandOrControl+Shift+C', 'hotkey:toggle-camera')
 }
 
+/**
+ * Read the room directory on the renderer's behalf.
+ *
+ * The renderer cannot do this itself, and deliberately so: its CSP leaves
+ * `connect-src` closed to http and https, which is the only thing stopping
+ * MediaPipe from POSTing usage logs to Google on every camera background.
+ * Opening it for one GET would hand that telemetry its channel back.
+ *
+ * Here there is no CSP and no CORS, and the signalling host is the only
+ * address this ever asks for.
+ */
+function registerLobby(): void {
+  ipcMain.handle('lobby:read', async (_event, url: string): Promise<unknown | null> => {
+    if (!/^https?:\/\//i.test(url)) return null
+    try {
+      const response = await fetch(url, {
+        // A server that is down must not leave the entrance saying
+        // "looking" until someone gives up and closes the app.
+        signal: AbortSignal.timeout(5000)
+      })
+      if (!response.ok) return null
+      return await response.json()
+    } catch {
+      // Unreachable is a normal state here, not an error worth logging
+      // every four seconds for as long as someone leaves the app open.
+      return null
+    }
+  })
+}
+
 void app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.tvmirante.app')
   app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
@@ -144,6 +174,7 @@ void app.whenReady().then(() => {
   registerWindowControls()
   registerCapture()
   registerProcessAudio(mainWindow)
+  registerLobby()
   registerHotkeys()
   registerOverlay(mainWindow)
   ipcMain.handle('overlay:bind-shortcuts', (event, shortcuts: OverlayShortcuts) =>

@@ -21,6 +21,10 @@ export interface MiranteApi {
     isMaximized: () => Promise<boolean>
     onState: (handler: (state: WindowState) => void) => () => void
   }
+  /** The room directory, fetched by the main process. See its handler. */
+  lobby: {
+    read: (url: string) => Promise<unknown | null>
+  }
   capture: {
     /** Everything shareable right now, with live thumbnails. */
     listSources: () => Promise<CaptureSource[]>
@@ -125,6 +129,9 @@ const api: MiranteApi = {
     close: () => ipcRenderer.send('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:is-maximized') as Promise<boolean>,
     onState: (handler) => subscribe('window:state', (state) => handler(state as WindowState))
+  },
+  lobby: {
+    read: (url) => ipcRenderer.invoke('lobby:read', url) as Promise<unknown | null>
   },
   capture: {
     listSources: () => ipcRenderer.invoke('capture:list-sources') as Promise<CaptureSource[]>,

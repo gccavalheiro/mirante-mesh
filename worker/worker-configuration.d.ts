@@ -1,6 +1,7 @@
 /** Bindings and variables declared in wrangler.jsonc. */
 interface Env {
   ROOM: DurableObjectNamespace
+  DIRECTORY: DurableObjectNamespace
   MAX_PEERS_PER_ROOM?: string
   STUN_URLS?: string
   CLOUDFLARE_TURN_KEY_ID?: string

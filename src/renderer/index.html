@@ -21,6 +21,11 @@
       option to turn that off. connect-src not allowing https: is what stops
       it: the request is refused, MediaPipe gives up after the first refusal,
       and "Refused to connect" appears once per background started. Leave it.
+
+      That is why the room directory is fetched by the MAIN process and
+      handed over by IPC, rather than with `fetch` from here. Opening
+      connect-src to https: would have bought one HTTP call and given the
+      telemetry its channel back.
     -->
     <meta
       http-equiv="Content-Security-Policy"

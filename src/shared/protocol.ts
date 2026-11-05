@@ -39,6 +39,54 @@ export interface PeerInfo {
   joinedAt: number
 }
 
+/**
+ * One open room, as the entrance sees it.
+ *
+ * A room here is not a record anywhere — it exists exactly as long as
+ * someone is standing in it. So this is a census, not a directory: nothing
+ * is created, nothing is reserved, and an empty room stops existing without
+ * anyone deleting it.
+ */
+export interface LobbyPerson {
+  name: string
+  /** The same hue they will have inside, so a face is the same face. */
+  hue: number
+}
+
+export interface LobbyRoom {
+  id: RoomId
+  /**
+   * Who is in there.
+   *
+   * People, not a count. "Joacy e dellannu" is a reason to walk in; "2
+   * pessoas" is a statistic — and carrying the hue means the entrance can
+   * draw the same faces the room will.
+   */
+  people: LobbyPerson[]
+  /** Whether anyone in there is sharing a screen. The reason to join. */
+  live: boolean
+  /**
+   * WHAT is on, when the publisher said.
+   *
+   * "ao vivo" tells you a room is worth opening; the window title tells you
+   * whether it is worth opening to YOU. The publishers already send this so
+   * viewers can label the stage — it costs nothing to carry it one step
+   * further, to the people deciding whether to walk in.
+   */
+  showing?: string
+  /** When the room came into being, so it can say how long it has been going. */
+  since: number
+}
+
+/** What is happening on this server right now. */
+export interface LobbySnapshot {
+  rooms: LobbyRoom[]
+  /** Everyone, across every room. */
+  people: number
+  /** Server clock, so a client can tell a stale snapshot from a quiet night. */
+  at: number
+}
+
 /** What a peer is currently publishing. Drives the stage layout. */
 export interface PeerPublishState {
   screen: boolean

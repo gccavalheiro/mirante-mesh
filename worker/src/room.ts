@@ -48,14 +48,103 @@ interface Attachment {
   clientId: string
 }
 
+/**
+ * How often an occupied room re-announces itself to the directory.
+ *
+ * The directory expires an entry it has not heard from, because a room
+ * that dies without cleaning up is indistinguishable from a quiet one.
+ * This has to beat comfortably inside that window.
+ */
+const HEARTBEAT_MS = 25_000
+
 export class Room extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
     // Answered by the runtime without waking us. Must be a literal match.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'))
+
+    // The name has to be read back from storage before anything can run,
+    // because hibernation destroys this object and rebuilds it. As a plain
+    // field it came back empty, every room reported itself under "", they
+    // all overwrote each other in the directory, and no room ever
+    // disappeared — one would clear the key and the next heartbeat would
+    // put it straight back.
+    ctx.blockConcurrencyWhile(async () => {
+      this.name = (await ctx.storage.get<string>('name')) ?? ''
+    })
   }
 
+  /**
+   * Tell the directory what is in here now.
+   *
+   * Called after anything that changes the answer — someone arriving,
+   * leaving, or starting a broadcast — and on a timer while occupied. Never
+   * awaited by the protocol path: the census failing must not be able to
+   * delay or break somebody joining a room.
+   */
+  private report(): void {
+    // Without a name there is nothing the directory can key on, and an
+    // entry under "" is one every other room will fight over.
+    if (!this.name) return
+
+    const inside = this.peers()
+    let live = false
+    let showing: string | undefined
+    let since = Number.MAX_SAFE_INTEGER
+
+    for (const { data } of inside) {
+      if (data.state.screen) {
+        live = true
+        // First publisher wins. With two broadcasts the entrance is not the
+        // place to disambiguate — walking in is.
+        showing ??= data.state.screenLabel
+      }
+      if (data.info.joinedAt < since) since = data.info.joinedAt
+    }
+
+    const body = JSON.stringify({
+      room: this.name,
+      people: inside.map(({ data }) => ({ name: data.info.name, hue: data.info.hue })),
+      live,
+      showing,
+      since: inside.length > 0 ? since : Date.now()
+    })
+
+    this.ctx.waitUntil(
+      this.env.DIRECTORY.get(this.env.DIRECTORY.idFromName('global'))
+        .fetch('https://directory/report', { method: 'POST', body })
+        .then(() => undefined)
+        .catch(() => undefined)
+    )
+
+    // Keep beating only while there is something to report. An empty room
+    // that keeps waking itself up forever is a room nobody is in, costing
+    // money.
+    if (inside.length > 0) void this.ctx.storage.setAlarm(Date.now() + HEARTBEAT_MS)
+  }
+
+  /** The heartbeat. Re-reports, or goes quiet if everyone has gone. */
+  async alarm(): Promise<void> {
+    this.report()
+  }
+
+  /**
+   * This room's own name.
+   *
+   * A Durable Object addressed by name cannot read that name back, so the
+   * Worker passes it on the upgrade. Kept in storage rather than memory
+   * because this object does not survive hibernation and the directory
+   * lists rooms by the name people type.
+   */
+  private name = ''
+
   async fetch(request: Request): Promise<Response> {
+    const named = new URL(request.url).searchParams.get('name')
+    if (named && named !== this.name) {
+      this.name = named
+      await this.ctx.storage.put('name', named)
+    }
+
     // Diagnostics. Knowing the room name already lets anyone join it and see
     // the same list, so this exposes nothing new — it just makes the server's
     // own view readable without a client attached.
@@ -202,6 +291,7 @@ export class Room extends DurableObject<Env> {
         iceServers
       })
       this.broadcast({ t: 'peerJoined', peer: info, state: attachment.state }, id)
+      this.report()
       return
     }
 
@@ -211,6 +301,9 @@ export class Room extends DurableObject<Env> {
       case 'publishState': {
         socket.serializeAttachment({ ...self, state: msg.state })
         this.broadcast({ t: 'peerState', id: self.info.id, state: msg.state }, self.info.id)
+        // Starting or stopping a broadcast changes whether this room is
+        // worth walking into, which is the most useful thing the list says.
+        this.report()
         break
       }
       case 'join': {
@@ -276,5 +369,6 @@ export class Room extends DurableObject<Env> {
     // `bye` followed by the socket closing must not announce two departures.
     socket.serializeAttachment(null)
     this.broadcast({ t: 'peerLeft', id: self.info.id })
+    this.report()
   }
 }

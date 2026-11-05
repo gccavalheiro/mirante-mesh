@@ -26,6 +26,7 @@ import {
 import { useAutoHide } from './lib/use-auto-hide'
 import { useHotkeys } from './lib/use-hotkeys'
 import { CameraFeed, type SelfView } from './rtc/camera-background'
+import { resolveServer } from './lib/server'
 import { broadcastLoad } from './rtc/peer-link'
 import {
   closeMic,
@@ -40,9 +41,8 @@ import { captureConstraints, type ScreenProfileName } from './rtc/sdp'
 import { session, useSession } from './rtc/use-session'
 
 /** Replaced at build time from MIRANTE_SIGNAL_URL — see electron.vite.config.ts. */
-declare const __SIGNAL_URL__: string
 
-const DEFAULT_SERVER = __SIGNAL_URL__
+
 /** Filled from the updater state, which already carries the installed build. */
 let appVersion = '—'
 const STORE_KEY = 'tvmirante.join'
@@ -786,7 +786,7 @@ export function App(): JSX.Element {
   const join = useCallback((details: JoinDetails) => {
     localStorage.setItem(STORE_KEY, JSON.stringify(details))
     setJoined(details)
-    session.connect(details.server || DEFAULT_SERVER, details.room, details.name)
+    session.connect(resolveServer(details.server), details.room, details.name)
   }, [])
 
   const leave = useCallback(async () => {

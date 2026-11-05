@@ -52,19 +52,3 @@ export function Logo({ size = 24, dark = false, className }: LogoProps): JSX.Ele
     </svg>
   )
 }
-
-/**
- * Stacked wordmark for the join screen. The rule under it is part of the
- * lockup, not a divider — it is the horizon the lighthouse stands on.
- */
-export function Wordmark(): JSX.Element {
-  return (
-    <div className="tm-wordmark">
-      <Logo size={56} className="tm-wordmark__mark" />
-      <h1 className="tm-wordmark__type">
-        <span>TV</span>
-        <span>MIRANTE</span>
-      </h1>
-    </div>
-  )
-}

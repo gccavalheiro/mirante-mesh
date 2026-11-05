@@ -1,0 +1,660 @@
+/*
+ * The entrance — two states, each owning the whole window.
+ *
+ * Same language as the rest of the app: hairlines as structure, monospace
+ * labelling, zero radius, one lilac accent. What changed is that nothing
+ * here is a centred column any more. A 720px stack of form sections down
+ * the middle of a 1280px window is still a form, however dark it is.
+ */
+
+/*
+ * The window has no frame, so something on every screen has to be draggable
+ * or it cannot be moved at all. In the app proper that is the title bar,
+ * which the entrance does not render — the old join screen declared its own
+ * drag region and losing it in the rewrite nailed the window to the desktop.
+ *
+ * The whole background drags; everything you can actually operate opts out,
+ * or a click on a button would start a drag instead.
+ */
+.tm-thr,
+.tm-home {
+  -webkit-app-region: drag;
+}
+
+.tm-thr input,
+.tm-thr button,
+.tm-home input,
+.tm-home button,
+.tm-home a,
+.tm-rack__list,
+.tm-thr__field {
+  -webkit-app-region: no-drag;
+}
+
+/* --- the threshold ------------------------------------------------------ */
+/*
+ * One question, with the window to itself. No card and no panel: a boxed
+ * field floating in an empty screen reads as a form, and this is meant to
+ * read as being asked something.
+ */
+.tm-thr {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: var(--s-8);
+  background: var(--surface-base);
+  /* A single soft pool of accent behind the question, so the screen has a
+     centre of gravity without anything being drawn on it. */
+  background-image: radial-gradient(
+    60% 50% at 50% 42%,
+    hsl(263 88% 72% / 0.07),
+    transparent 70%
+  );
+}
+
+.tm-thr__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(520px, 100%);
+  text-align: center;
+}
+
+.tm-thr__mark {
+  opacity: 0.9;
+  margin-bottom: var(--s-6);
+}
+
+.tm-thr__ask {
+  font-size: var(--text-display);
+  font-weight: 800;
+  letter-spacing: var(--tracking-display);
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+.tm-thr__why {
+  margin-top: var(--s-5);
+  /* Wide enough that the sentence does not break mid-phrase. At 42ch it
+     split "Fica / salvo", which reads as a typo in the middle of the one
+     screen that is supposed to look composed. */
+  max-width: 54ch;
+  color: var(--text-tertiary);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+/* An underline, not a box. The rule thickens and turns lilac on focus —
+   the field answering you rather than lighting up a container. */
+.tm-thr__field {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  margin-top: var(--s-10);
+  padding-bottom: var(--s-3);
+  border-bottom: 2px solid var(--rule);
+  transition: border-color 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tm-thr__field:focus-within {
+  border-bottom-color: var(--accent);
+}
+
+.tm-thr__input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text-primary);
+  font-size: var(--text-h2);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  text-align: center;
+}
+
+.tm-thr__input::placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.tm-thr__input:focus-visible {
+  outline: none;
+}
+
+.tm-thr__go {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  font-size: var(--text-h3);
+  cursor: pointer;
+  opacity: 1;
+  transition:
+    opacity 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tm-thr__go:disabled {
+  opacity: 0;
+  cursor: default;
+}
+
+.tm-thr__go:hover:not(:disabled) {
+  transform: translateX(3px);
+}
+
+/* --- home: faceplate beside a rack -------------------------------------- */
+.tm-home {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  background: var(--surface-base);
+}
+
+/* Same background as the rack, divided by a hairline. A different colour
+   here would split the window into two worlds. */
+.tm-face {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  padding: var(--s-6);
+  border-right: 1px solid var(--rule);
+  min-height: 0;
+}
+
+.tm-face__mark {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.tm-face__wordmark {
+  font-size: var(--text-micro);
+  font-weight: 800;
+  letter-spacing: var(--tracking-label);
+}
+
+.tm-face__you {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding-top: var(--s-2);
+}
+
+.tm-face__you .tm-avatar {
+  width: 38px;
+  height: 38px;
+  font-size: var(--text-h4);
+}
+
+.tm-face__ident {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.tm-face__name {
+  font-size: var(--text-h4);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tm-face__grow {
+  flex: 1;
+  min-height: var(--s-6);
+}
+
+.tm-face__error {
+  padding: var(--s-3);
+  border: 1px solid var(--tally);
+  color: var(--tally);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+}
+
+/* --- readings ----------------------------------------------------------- */
+.tm-census {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4) 0;
+  border-top: 1px solid var(--rule-faint);
+  border-bottom: 1px solid var(--rule-faint);
+}
+
+.tm-census.is-dead {
+  color: var(--text-muted);
+}
+
+.tm-reading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+}
+
+/* The only round things on the plate, because they are lamps. */
+.tm-reading__lamp {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--signal-dead);
+  transform: translateY(-2px);
+}
+
+.tm-reading__lamp[data-on='true'] {
+  background: var(--signal-good);
+  box-shadow: 0 0 0 3px hsl(168 68% 58% / 0.16);
+}
+
+.tm-reading__value {
+  font-size: var(--text-h2);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+}
+
+/* --- opening one yourself ------------------------------------------------ */
+.tm-start {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.tm-start__input {
+  padding: var(--s-3);
+  background: var(--surface-input);
+  border: 1px solid var(--rule);
+  color: var(--text-primary);
+  font-size: var(--text-body);
+  transition: border-color 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tm-start__input::placeholder {
+  color: var(--text-muted);
+}
+
+.tm-start__input:focus-visible {
+  outline: none;
+  border-color: var(--rule-accent);
+}
+
+/*
+ * Quieter than the rack.
+ *
+ * As a filled lilac block this was the loudest thing on the screen, in the
+ * bottom corner, pulling the eye away from the list — and the list is the
+ * reason the screen exists. Opening a room is the fallback for when nobody
+ * is around. An outline keeps it unmistakably the action in this column
+ * without competing for the one accent on the page.
+ */
+.tm-start__go {
+  padding: var(--s-3);
+  background: transparent;
+  border: 1px solid var(--accent-edge);
+  color: var(--accent-bright);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background-color 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tm-start__go:hover:not(:disabled) {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+}
+
+.tm-start__go:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.tm-start__go:disabled {
+  border-color: var(--rule);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.tm-start__hint {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+}
+
+/* --- the rack ------------------------------------------------------------ */
+.tm-rack {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--s-6) var(--s-8);
+  overflow-y: auto;
+}
+
+.tm-rack__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding-bottom: var(--s-4);
+}
+
+/* The hairline that makes a heading read as rack labelling rather than as a
+   section title. It takes whatever width is left over. */
+.tm-rack__rule {
+  flex: 1;
+  height: 1px;
+  background: var(--rule-faint);
+}
+
+.tm-rack__tally {
+  color: var(--text-muted);
+}
+
+/*
+ * Runs to the bottom of the window.
+ *
+ * Sized to its contents, four rooms left four hundred pixels of nothing
+ * under a box that just stopped — the page reading as unfinished rather
+ * than as a short list. A rack is a frame with slots in it, and the empty
+ * slots are part of the object.
+ */
+.tm-rack__list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rule);
+  /* Free slots, at the pitch of a row. An empty frame under a short list
+     reads as a page that stopped loading; ruled slots read as a rack with
+     room in it, which is what it is. */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 99px,
+    var(--rule-faint) 99px,
+    var(--rule-faint) 100px
+  );
+}
+
+/* The rows paint over the slot lines so only the free ones show. */
+.tm-chan {
+  background: var(--surface-base);
+}
+
+/* --- one channel ---------------------------------------------------------- */
+.tm-chan {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-5);
+  width: 100%;
+  /* Generous: these are the only objects on the screen and the row is the
+     hit area for the most consequential click at the entrance. */
+  padding: var(--s-5);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--rule-faint);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+  animation: tm-chan-in 320ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+.tm-chan:last-child {
+  border-bottom: 0;
+}
+
+.tm-chan:hover:not(:disabled),
+.tm-chan:focus-visible {
+  background: var(--surface-1);
+  outline: none;
+}
+
+.tm-chan:focus-visible {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.tm-chan:disabled {
+  cursor: default;
+}
+
+/* Positional labelling, not data, so it stays muted. */
+.tm-chan__no {
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+
+.tm-chan__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.tm-chan__title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+/* The call sign, and the biggest thing in the row: it is what you are
+   choosing. Everything beside it is labelling. */
+.tm-chan__name {
+  font-size: var(--text-h3);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Means here exactly what it means everywhere else in this app. */
+.tm-chan__tally {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex: none;
+  padding: 2px var(--s-2);
+  border: 1px solid var(--tally-edge);
+  background: var(--tally-wash);
+  color: var(--tally);
+}
+
+.tm-chan__lamp {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-full);
+  background: var(--tally);
+  animation: tm-lamp 2s ease-in-out infinite;
+}
+
+/* What is on, beside the lamp that says something is. Truncates early —
+   a window title is somebody else's text and can be any length. */
+.tm-chan__showing {
+  min-width: 0;
+  max-width: 28ch;
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tm-chan__faces {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+/* Overlapped, the way a group of people is drawn. The ring is the surface
+   showing through, which is what separates one face from the next. */
+.tm-chan__face {
+  display: block;
+  margin-right: -8px;
+}
+
+.tm-chan__face:last-of-type {
+  margin-right: 0;
+}
+
+.tm-chan__face .tm-avatar {
+  width: 22px;
+  height: 22px;
+  font-size: var(--text-nano);
+  box-shadow: 0 0 0 2px var(--surface-base);
+}
+
+.tm-chan:hover:not(:disabled) .tm-chan__face .tm-avatar {
+  box-shadow: 0 0 0 2px var(--surface-1);
+}
+
+.tm-chan__more {
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  margin-left: var(--s-2);
+}
+
+.tm-chan__dot,
+.tm-chan__age {
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+  flex: none;
+}
+
+.tm-chan__who {
+  margin-left: var(--s-2);
+  font-size: var(--text-micro);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tm-chan__go {
+  color: var(--text-muted);
+  font-size: var(--text-h4);
+  transition:
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tm-chan:hover:not(:disabled) .tm-chan__go {
+  color: var(--accent);
+  transform: translateX(3px);
+}
+
+/* --- an empty rack -------------------------------------------------------- */
+/* Fills the space it is in rather than sitting as one grey line at the top. */
+.tm-nobody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-3);
+  padding: var(--s-10);
+  border: 1px solid var(--rule-faint);
+  text-align: center;
+}
+
+/*
+ * An empty rack slot, drawn at the size of one.
+ *
+ * The first version was a dark square with an inset ring, which read as a
+ * missing image rather than as anything deliberate. This is the same
+ * hairline vocabulary as the frame around it: a wide, short slot with
+ * nothing seated in it.
+ */
+.tm-nobody__glyph {
+  width: 120px;
+  height: 34px;
+  margin-bottom: var(--s-3);
+  border: 1px solid var(--rule);
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0,
+    transparent 7px,
+    var(--rule-faint) 7px,
+    var(--rule-faint) 8px
+  );
+}
+
+.tm-nobody__title {
+  font-size: var(--text-h3);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+}
+
+.tm-nobody__body {
+  max-width: 44ch;
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+@keyframes tm-chan-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes tm-lamp {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Movement is the part that can make someone ill. The information is not. */
+@media (prefers-reduced-motion: reduce) {
+  .tm-chan,
+  .tm-chan__lamp {
+    animation: none;
+  }
+}
+
+/* The faceplate stops earning a column of its own below this. */
+@media (max-width: 860px) {
+  .tm-home {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .tm-face {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .tm-face__grow {
+    display: none;
+  }
+  .tm-rack {
+    padding: var(--s-5);
+  }
+  .tm-thr__ask {
+    font-size: var(--text-h1);
+  }
+}
