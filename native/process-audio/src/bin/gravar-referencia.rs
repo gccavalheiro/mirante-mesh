@@ -33,11 +33,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .cloned()
         .unwrap_or_else(|| "referencia-loopback.wav".to_string());
 
-    // Excluir um pid que nao existe captura tudo que esta tocando. E o que
-    // queremos: a referencia e o que chegou ao alto falante, venha do
-    // Mirante, do Discord ou de um navegador.
-    let pid_inexistente = u32::MAX;
-    let mut captura = Capture::open(pid_inexistente, LoopbackMode::ExcludeTree)?;
+    // Excluir o PROPRIO processo captura tudo o mais que esta tocando, que
+    // e o que queremos: a referencia e o que chegou ao alto falante, venha
+    // do Mirante, do Discord ou de um navegador.
+    //
+    // A primeira versao passava u32::MAX como pid, raciocinando que excluir
+    // um processo inexistente excluiria nada. O WASAPI nao trata isso como
+    // "nada": a referencia saiu cheia de buracos de silencio digital, -240
+    // dBFS por segundos inteiros, enquanto o microfone seguia com conteudo.
+    // Este e o caso documentado.
+    let eu = std::process::id();
+    let mut captura = Capture::open(eu, LoopbackMode::ExcludeTree)?;
 
     // O formato e fixo no backend; `Capture` nao o carrega.
     let taxa = mirante_process_audio::win::SAMPLE_RATE;

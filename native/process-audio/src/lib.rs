@@ -37,6 +37,10 @@ use napi_derive::napi;
 // going through Node. The echo work is decided by numbers measured offline,
 // and a bench that has to boot Electron to record sixty seconds is a bench
 // nobody runs.
+/// Echo suppression against the loopback reference. Platform-independent
+/// DSP, so it builds and is testable everywhere, including the bench.
+pub mod echo;
+
 #[cfg(windows)]
 pub mod win;
 
