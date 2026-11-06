@@ -43,6 +43,9 @@ use napi_derive::napi;
 pub use mirante_echo as echo;
 
 #[cfg(windows)]
+pub mod keys;
+
+#[cfg(windows)]
 pub mod win;
 
 #[cfg(windows)]
@@ -89,6 +92,52 @@ pub struct CaptureFormat {
 /// Returns `false` on Windows 10 before build 20348, and on every non-Windows
 /// platform. Callers must degrade gracefully: offer "no audio" or warn about
 /// echo before falling back to system-wide loopback.
+/// Watch the keyboard globally, reporting press AND release.
+///
+/// For push-to-talk, which `globalShortcut` cannot do: it fires on press
+/// and never on release, so it can toggle but not hold. And holding has to
+/// work while the GAME has focus, which is the whole point — a
+/// push-to-talk that needs the app in front is a mute button with extra
+/// steps.
+///
+/// The key is never swallowed: this listens, it does not intercept, or the
+/// same key would stop reaching the game it was pressed in.
+#[napi(ts_args_type = "onKey: (vk: number, down: boolean) => void")]
+pub fn start_key_watch(on_key: ThreadsafeFunction<Vec<u32>, ErrorStrategy::Fatal>) -> Result<()> {
+    #[cfg(windows)]
+    {
+        let Some((rx, _thread)) = keys::start() else {
+            return Ok(());
+        };
+        std::thread::Builder::new()
+            .name("mirante-keys-bridge".to_owned())
+            .spawn(move || {
+                // The hook thread must never block, so the bridge to JS
+                // lives here instead: one more hop, and the OS input thread
+                // stays free.
+                while let Ok((vk, down)) = rx.recv() {
+                    on_key.call(
+                        vec![vk, u32::from(down)],
+                        ThreadsafeFunctionCallMode::NonBlocking,
+                    );
+                }
+            })
+            .map_err(|e| Error::new(Status::GenericFailure, e.to_string()))?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = on_key;
+        Ok(())
+    }
+}
+
+#[napi]
+pub fn stop_key_watch() {
+    #[cfg(windows)]
+    keys::stop();
+}
+
 #[napi]
 pub fn is_supported() -> bool {
     #[cfg(windows)]

@@ -1717,14 +1717,53 @@
   height: 72px;
 }
 
-/* Leituras de instrumento no diagnóstico de áudio. Monoespaçado e tabular
-   porque são números que mudam sozinhos, e dígito que empurra os vizinhos
-   a cada atualização lê como erro. */
-.tm-leitura {
-  font-size: var(--text-h4);
-  color: var(--text-primary);
+/* A régua de diagnóstico: quatro leituras lado a lado, lidas de relance.
+   Densa de propósito — ocupa menos que uma linha de configuração e não
+   acrescenta scroll a uma aba que já é longa. */
+.tm-diag {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--rule);
+  margin-bottom: var(--s-5);
 }
 
-.tm-leitura.is-warn {
+.tm-diag__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s-3);
+  border-right: 1px solid var(--rule-faint);
+  min-width: 0;
+}
+
+.tm-diag__item:last-child {
+  border-right: 0;
+}
+
+.tm-diag__item .label {
+  font-size: var(--text-nano);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tabular porque o número muda sozinho, e dígito que empurra os vizinhos a
+   cada atualização lê como defeito. */
+.tm-diag__item b {
+  font-size: var(--text-h4);
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: var(--tracking-tight);
+}
+
+/* A unidade é rótulo, não valor: pequena, apagada, sem itálico. */
+.tm-diag__item b i {
+  font-style: normal;
+  font-size: var(--text-nano);
+  color: var(--text-muted);
+  margin-left: 2px;
+}
+
+.tm-diag__item.is-warn b {
   color: var(--signal-fair);
 }

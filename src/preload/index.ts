@@ -67,6 +67,17 @@ export interface MiranteApi {
     on: (key: HotkeyChannel, handler: () => void) => () => void
   }
   /**
+   * Teclado global, com soltar — o que `globalShortcut` nao entrega.
+   *
+   * So para push-to-talk. A tecla nunca e engolida: isto escuta, nao
+   * intercepta, ou ela deixaria de chegar ao jogo onde foi pressionada.
+   */
+  keys: {
+    watch: () => Promise<boolean>
+    unwatch: () => Promise<void>
+    on: (handler: (vk: number, down: boolean) => void) => () => void
+  }
+  /**
    * The live mix of your broadcast, one fader per application.
    *
    * Only meaningful while sharing with sound. The set of applications moves
@@ -153,6 +164,15 @@ const api: MiranteApi = {
   },
   hotkeys: {
     on: (key, handler) => subscribe(`hotkey:${key}`, () => handler())
+  },
+  keys: {
+    watch: () => ipcRenderer.invoke('keys:watch') as Promise<boolean>,
+    unwatch: () => ipcRenderer.invoke('keys:unwatch') as Promise<void>,
+    on: (handler) => {
+      const fn = (_e: unknown, vk: number, down: boolean): void => handler(vk, down)
+      ipcRenderer.on('keys:event', fn)
+      return () => ipcRenderer.removeListener('keys:event', fn)
+    }
   },
   mixer: {
     channels: () => ipcRenderer.invoke('audio:mixer') as Promise<MixerChannel[]>,

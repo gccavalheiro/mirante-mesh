@@ -10,7 +10,12 @@ import {
 } from './overlay'
 import { cancelPendingCapture, registerCapture } from './capture'
 import { log, startLogging } from './log'
-import { registerProcessAudio, stopProcessAudio } from './process-audio'
+import {
+  registerProcessAudio,
+  startKeyWatch,
+  stopKeyWatch,
+  stopProcessAudio
+} from './process-audio'
 import { registerUpdaterIpc, startUpdater, stopUpdater } from './updater'
 
 /**
@@ -141,6 +146,47 @@ function registerLobby(): void {
   })
 }
 
+/**
+ * Tecla de falar, com soltar.
+ *
+ * `globalShortcut` dispara ao pressionar e nunca ao soltar, entao serve
+ * para alternar e nao para segurar. E segurar precisa funcionar com o JOGO
+ * em foco, que e o ponto inteiro: push-to-talk que exige o app na frente e
+ * um botao de mudo com passos a mais.
+ *
+ * O gancho nativo e so um relator. Qual tecla importa, e o que fazer com
+ * ela, fica no renderer, onde o resto do estado do microfone ja vive.
+ */
+function registerPushToTalk(window: BrowserWindow): void {
+  let watching = false
+
+  ipcMain.handle('keys:watch', (): boolean => {
+    if (watching) return true
+    try {
+      const ok = startKeyWatch((vk: number, down: boolean) => {
+        if (!window.isDestroyed()) window.webContents.send('keys:event', vk, down)
+      })
+      if (!ok) return false
+      watching = true
+      log('keys', 'gancho de teclado ligado')
+      return true
+    } catch (error) {
+      log('keys', 'nao consegui ligar o gancho:', String(error))
+      return false
+    }
+  })
+
+  ipcMain.handle('keys:unwatch', (): void => {
+    if (!watching) return
+    stopKeyWatch()
+    watching = false
+  })
+
+  app.on('before-quit', () => {
+    if (watching) stopKeyWatch()
+  })
+}
+
 void app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.tvmirante.app')
   app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
@@ -175,6 +221,7 @@ void app.whenReady().then(() => {
   registerCapture()
   registerProcessAudio(mainWindow)
   registerLobby()
+  registerPushToTalk(mainWindow)
   registerHotkeys()
   registerOverlay(mainWindow)
   ipcMain.handle('overlay:bind-shortcuts', (event, shortcuts: OverlayShortcuts) =>

@@ -30,6 +30,9 @@ export interface AudioApp {
 }
 
 interface NativeModule {
+  /** Teclado global, com soltar. Ausente em addon antigo. */
+  startKeyWatch?: (onKey: (vk: number, down: boolean) => void) => void
+  stopKeyWatch?: () => void
   isSupported: () => boolean
   listAudioApps: () => AudioApp[]
   pidForWindow: (hwnd: number) => number | null
@@ -142,6 +145,24 @@ export interface AudioCapability {
 }
 
 /** True when per-application capture is usable right now. */
+/**
+ * O gancho de teclado global, para o push-to-talk.
+ *
+ * Vive aqui porque e o mesmo addon nativo, carregado pelo mesmo caminho
+ * com as mesmas tres tentativas. Duplicar esse carregamento so para uma
+ * funcao seria duplicar tambem as tres formas de ele nao estar la.
+ */
+export function startKeyWatch(onKey: (vk: number, down: boolean) => void): boolean {
+  const mod = loadNative()
+  if (!mod?.startKeyWatch) return false
+  mod.startKeyWatch(onKey)
+  return true
+}
+
+export function stopKeyWatch(): void {
+  loadNative()?.stopKeyWatch?.()
+}
+
 export function audioAddonReady(): boolean {
   return getAudioCapability().supported
 }

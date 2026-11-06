@@ -84,6 +84,8 @@ interface Chain {
   context: AudioContext
   source: MediaStreamAudioSourceNode
   highpass: BiquadFilterNode
+  /** Devolve o brilho que a supressão leva junto. */
+  presence: BiquadFilterNode
   gain: GainNode
   echo: AudioWorkletNode | null
   /** The mixer's output, bridged into this context as the echo reference. */
@@ -202,6 +204,23 @@ export async function openMic(
   const gainNode = context.createGain()
   gainNode.gain.value = gain
 
+  /*
+   * Realce suave acima de 3 kHz, no fim da cadeia.
+   *
+   * Supressor de ruído neural trabalha por banda, e trabalha mais nas
+   * altas — é lá que o ruído de sala vive. O efeito colateral é que a voz
+   * sai escurecida, e foi exatamente esse o relato: "um pouco mais grave".
+   *
+   * A correção é devolver onde foi tirado, e não desligar a supressão. Três
+   * decibéis é pouco o bastante para não sibilar e o suficiente para a
+   * consoante voltar — e são as consoantes, não as vogais, que carregam a
+   * inteligibilidade.
+   */
+  const presence = context.createBiquadFilter()
+  presence.type = 'highshelf'
+  presence.frequency.value = 3000
+  presence.gain.value = 3
+
   const analyser = context.createAnalyser()
   analyser.fftSize = 256
   analyser.smoothingTimeConstant = 0.6
@@ -223,6 +242,7 @@ export async function openMic(
     context,
     source,
     highpass,
+    presence,
     gain: gainNode,
     echo: null,
     echoReference: null,
@@ -308,6 +328,8 @@ async function route(level: NoiseSuppression, echo: boolean): Promise<void> {
   // Echo first, then noise. They are different problems, and the order is
   // not arbitrary: what the speakers put back into the microphone is
   // speech, and a noise suppressor preserves speech by construction.
+  current.presence.disconnect()
+
   let tail: AudioNode = gain
   if (echo && current.echo) {
     gain.connect(current.echo, 0, 0)
@@ -318,7 +340,10 @@ async function route(level: NoiseSuppression, echo: boolean): Promise<void> {
     tail.connect(current.rnnoise)
     tail = current.rnnoise
   }
-  tail.connect(analyser)
+  // O realce vem DEPOIS das supressões: antes delas ele só daria mais
+  // energia alta para o supressor tirar de novo.
+  tail.connect(current.presence)
+  current.presence.connect(analyser)
   analyser.connect(destination)
 }
 

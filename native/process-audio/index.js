@@ -310,10 +310,14 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { LoopbackMode, isSupported, listAudioApps, pidForWindow, ProcessAudioCapture } = nativeBinding
+const { LoopbackMode, startKeyWatch, stopKeyWatch, isSupported, listAudioApps, pidForWindow, executableForPid, parentPid, ProcessAudioCapture } = nativeBinding
 
 module.exports.LoopbackMode = LoopbackMode
+module.exports.startKeyWatch = startKeyWatch
+module.exports.stopKeyWatch = stopKeyWatch
 module.exports.isSupported = isSupported
 module.exports.listAudioApps = listAudioApps
 module.exports.pidForWindow = pidForWindow
+module.exports.executableForPid = executableForPid
+module.exports.parentPid = parentPid
 module.exports.ProcessAudioCapture = ProcessAudioCapture

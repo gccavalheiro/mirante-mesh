@@ -508,14 +508,15 @@ function MicMeter(): JSX.Element {
 /**
  * O que está acontecendo com o áudio, em números, ao vivo.
  *
- * A tela tinha controles e nenhuma leitura: dizia que a supressão estava
- * ligada e não mostrava um decibel. Isso não passa confiança porque não
- * dá para conferir nada — e as duas perguntas reais ("o que eu mando está
- * bom?" e "por que a voz do fulano trava?") têm respostas medidas que o
- * app já calcula e jogava fora.
+ * Uma régua, não uma lista. A primeira versão eram quatro linhas de
+ * largura cheia, iguais às dos controles — o que acrescentava scroll a uma
+ * aba já longa e fazia leitura de instrumento parecer mais configuração.
+ * Instrumento se lê de relance: quatro valores lado a lado, densos, com o
+ * rótulo pequeno em cima e o número embaixo, no mesmo registro monoespaçado
+ * que o resto do app usa para tudo que ele mede sobre si.
  *
  * Atualiza devagar de propósito. Número que pisca a sessenta quadros por
- * segundo é decoração; este é instrumento.
+ * segundo é decoração.
  */
 function Diagnostico({ peers }: { peers: PeerView[] }): JSX.Element {
   const [, redesenhar] = useState(0)
@@ -525,64 +526,58 @@ function Diagnostico({ peers }: { peers: PeerView[] }): JSX.Element {
   }, [])
 
   const atenuacao = echoAttenuationDb()
-  // A pior voz da sala é a que define se "está travando". Média esconderia
-  // exatamente a pessoa de quem se reclama.
+  // Pior caso, não média: média esconde exatamente a pessoa de quem se
+  // reclama.
   const pior = peers
     .filter((p) => p.stats.voiceConcealed > 0)
     .sort((a, b) => b.stats.voiceConcealed - a.stats.voiceConcealed)[0]
 
   return (
-    <Group title="Diagnóstico">
+    <div className="tm-diag" title={pior ? `Pior caso: ${pior.info.name}` : undefined}>
       <Leitura
-        rotulo="Eco removido"
-        valor={atenuacao > 0.1 ? `${atenuacao.toFixed(1)} dB` : '—'}
-        nota={atenuacao > 0.1 ? 'do que sai do seu microfone' : 'sem eco detectado'}
+        rotulo="eco removido"
+        valor={atenuacao > 0.1 ? atenuacao.toFixed(1) : '—'}
+        unidade="dB"
       />
       <Leitura
-        rotulo="Voz reconstruída"
-        valor={pior ? `${(pior.stats.voiceConcealed * 100).toFixed(1)}%` : '—'}
-        nota={
-          pior
-            ? `pior caso: ${pior.info.name}. Acima de 3% já se ouve como travada.`
-            : 'ninguém falando, ou nada se perdendo'
-        }
+        rotulo="voz refeita"
+        valor={pior ? (pior.stats.voiceConcealed * 100).toFixed(1) : '—'}
+        unidade="%"
         alerta={(pior?.stats.voiceConcealed ?? 0) > 0.03}
       />
       <Leitura
-        rotulo="Buffer da voz"
-        valor={pior && pior.stats.voiceBufferMs > 0 ? `${pior.stats.voiceBufferMs} ms` : '—'}
-        nota="quanto o seu computador segura antes de tocar"
+        rotulo="buffer"
+        valor={pior && pior.stats.voiceBufferMs > 0 ? String(pior.stats.voiceBufferMs) : '—'}
+        unidade="ms"
       />
       <Leitura
-        rotulo="Perda na voz"
-        valor={pior ? `${(pior.stats.voiceLoss * 100).toFixed(1)}%` : '—'}
-        nota="pacotes que não chegaram"
+        rotulo="perda"
+        valor={pior ? (pior.stats.voiceLoss * 100).toFixed(1) : '—'}
+        unidade="%"
         alerta={(pior?.stats.voiceLoss ?? 0) > 0.02}
       />
-    </Group>
+    </div>
   )
 }
 
 function Leitura({
   rotulo,
   valor,
-  nota,
+  unidade,
   alerta = false
 }: {
   rotulo: string
   valor: string
-  nota: string
+  unidade: string
   alerta?: boolean
 }): JSX.Element {
   return (
-    <div className="tm-setrow">
-      <div className="tm-setrow__text">
-        <b>{rotulo}</b>
-        <span>{nota}</span>
-      </div>
-      <div className="tm-setrow__control">
-        <b className={`num tm-leitura${alerta ? ' is-warn' : ''}`}>{valor}</b>
-      </div>
+    <div className={`tm-diag__item${alerta ? ' is-warn' : ''}`}>
+      <span className="label">{rotulo}</span>
+      <b className="num">
+        {valor}
+        <i>{unidade}</i>
+      </b>
     </div>
   )
 }

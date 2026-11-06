@@ -37,7 +37,19 @@ export interface CaptureFormat {
  * Returns `false` on Windows 10 before build 20348, and on every non-Windows
  * platform. Callers must degrade gracefully: offer "no audio" or warn about
  * echo before falling back to system-wide loopback.
+ * Watch the keyboard globally, reporting press AND release.
+ *
+ * For push-to-talk, which `globalShortcut` cannot do: it fires on press
+ * and never on release, so it can toggle but not hold. And holding has to
+ * work while the GAME has focus, which is the whole point — a
+ * push-to-talk that needs the app in front is a mute button with extra
+ * steps.
+ *
+ * The key is never swallowed: this listens, it does not intercept, or the
+ * same key would stop reaching the game it was pressed in.
  */
+export declare function startKeyWatch(onKey: (vk: number, down: boolean) => void): void
+export declare function stopKeyWatch(): void
 export declare function isSupported(): boolean
 /**
  * Enumerate processes that currently own an audio session.
@@ -54,6 +66,25 @@ export declare function listAudioApps(): Array<AudioApp>
  * available and the user never has to pick an app from a list.
  */
 export declare function pidForWindow(hwnd: number): number | null
+/**
+ * The executable that owns a pid, e.g. `"chrome.exe"`.
+ *
+ * Needed because a window and the audio it produces are often different
+ * processes: Chrome puts each window in a renderer and its sound in a
+ * separate audio service, which are siblings rather than parent and child.
+ * Capturing the window's process tree therefore records silence. Resolving
+ * the executable lets the caller find the sessions that belong to the same
+ * application instead.
+ */
+export declare function executableForPid(pid: number): string | null
+/**
+ * The process that spawned `pid`, when it is still discoverable.
+ *
+ * Every capture is opened with `IncludeTree` and the mixer sums them, so
+ * capturing both a parent and its child adds the same audio to itself.
+ * This is what lets the caller drop the redundant one.
+ */
+export declare function parentPid(pid: number): number | null
 /**
  * A running capture. Dropping or calling [`ProcessAudioCapture::stop`] releases
  * the device and joins the capture thread.
