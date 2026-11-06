@@ -499,3 +499,23 @@
   font-size: var(--text-nano);
   color: var(--text-tertiary);
 }
+
+/* Leituras na barra de título: etiqueta de equipamento, não alerta.
+   Discretas até terem motivo de não ser. */
+.tm-titlebar__meters {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  -webkit-app-region: no-drag;
+}
+
+.tm-meter {
+  font-size: var(--text-nano);
+  letter-spacing: var(--tracking-mono);
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.tm-meter.is-warn {
+  color: var(--signal-fair);
+}

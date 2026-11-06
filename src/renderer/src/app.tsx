@@ -989,6 +989,8 @@ export function App(): JSX.Element {
   return (
     <div className={`tm-shell tm-shell--${mode} tm-shell--rail-${settings.railPosition}`}>
       <TitleBar
+        rttMs={Math.max(0, ...snapshot.peers.map((p) => p.stats.rttMs))}
+        voiceConcealed={Math.max(0, ...snapshot.peers.map((p) => p.stats.voiceConcealed))}
         room={joined.room}
         status={snapshot.status}
         peerCount={snapshot.peers.length}

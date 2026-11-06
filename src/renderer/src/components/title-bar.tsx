@@ -18,6 +18,15 @@ interface TitleBarProps {
   status: SignalingStatus
   peerCount: number
   relayed: boolean
+  /**
+   * A pior latência da sala, em milissegundos, ou zero sem ninguém.
+   *
+   * Pior e não média: numa malha, a chamada é tão boa quanto o pior
+   * caminho, e a média esconde exatamente a pessoa que está sofrendo.
+   */
+  rttMs: number
+  /** Quanto da voz dos outros o receptor teve que inventar, 0..1. */
+  voiceConcealed: number
 }
 
 const STATUS_TEXT: Record<SignalingStatus, string> = {
@@ -28,7 +37,14 @@ const STATUS_TEXT: Record<SignalingStatus, string> = {
   closed: 'desconectado'
 }
 
-export function TitleBar({ room, status, peerCount, relayed }: TitleBarProps): JSX.Element {
+export function TitleBar({
+  room,
+  status,
+  peerCount,
+  relayed,
+  rttMs,
+  voiceConcealed
+}: TitleBarProps): JSX.Element {
   const [maximized, setMaximized] = useState(false)
 
   useEffect(() => {
@@ -58,6 +74,31 @@ export function TitleBar({ room, status, peerCount, relayed }: TitleBarProps): J
           <span className="tm-conn__dot" />
           {STATUS_TEXT[status]}
         </span>
+
+        {/* Leitura de instrumento na própria moldura, como etiqueta de
+            equipamento. "A chamada está boa?" é pergunta permanente numa
+            conversa, e permanente é o que fica na moldura — não o que
+            aparece quando alguém vai procurar. */}
+        {room && status === 'open' && peerCount > 0 && (
+          <span className="tm-titlebar__meters">
+            {rttMs > 0 && (
+              <span
+                className={`tm-meter num${rttMs > 150 ? ' is-warn' : ''}`}
+                title="Pior latência da sala"
+              >
+                {rttMs} ms
+              </span>
+            )}
+            {voiceConcealed > 0.01 && (
+              <span
+                className="tm-meter num is-warn"
+                title="Parte da voz que o seu computador teve que reconstruir — é isso que soa como travando"
+              >
+                voz {(voiceConcealed * 100).toFixed(0)}%
+              </span>
+            )}
+          </span>
+        )}
 
         {relayed && (
           <span className="tm-chip tm-chip--warn" title="Pelo menos um caminho usa TURN">
