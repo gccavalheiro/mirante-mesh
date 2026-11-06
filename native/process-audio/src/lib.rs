@@ -33,8 +33,12 @@ use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 
+// Public so the measurement bench in `src/bin` can drive a capture without
+// going through Node. The echo work is decided by numbers measured offline,
+// and a bench that has to boot Electron to record sixty seconds is a bench
+// nobody runs.
 #[cfg(windows)]
-mod win;
+pub mod win;
 
 #[cfg(windows)]
 use win as backend;
