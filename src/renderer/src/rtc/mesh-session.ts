@@ -1156,9 +1156,25 @@ export class MeshSession {
       mic: this.local.mic !== null,
       screenLabel: this.local.screenLabel ?? undefined,
       screenStreamId: this.local.screen?.id,
-      cameraStreamId: this.local.camera?.id
+      cameraStreamId: this.local.camera?.id,
+      activity: this.activity ?? undefined
     }
     this.signaling?.send({ t: 'publishState', state })
+  }
+
+  /**
+   * O que voce esta fazendo fora do Mirante, para a sala ver.
+   *
+   * Reanunciado so quando MUDA. A pessoa troca de janela o tempo todo, e
+   * mandar um broadcast a cada alternancia encheria a sala de mensagens
+   * para dizer a mesma coisa.
+   */
+  private activity: string | null = null
+
+  setActivity(app: string | null): void {
+    if (app === this.activity) return
+    this.activity = app
+    this.announce()
   }
 
   // --- local publishing ---------------------------------------------------

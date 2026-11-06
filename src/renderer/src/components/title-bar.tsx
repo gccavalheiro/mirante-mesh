@@ -25,8 +25,6 @@ interface TitleBarProps {
    * caminho, e a média esconde exatamente a pessoa que está sofrendo.
    */
   rttMs: number
-  /** Quanto da voz dos outros o receptor teve que inventar, 0..1. */
-  voiceConcealed: number
 }
 
 const STATUS_TEXT: Record<SignalingStatus, string> = {
@@ -42,8 +40,7 @@ export function TitleBar({
   status,
   peerCount,
   relayed,
-  rttMs,
-  voiceConcealed
+  rttMs
 }: TitleBarProps): JSX.Element {
   const [maximized, setMaximized] = useState(false)
 
@@ -75,28 +72,14 @@ export function TitleBar({
           {STATUS_TEXT[status]}
         </span>
 
-        {/* Leitura de instrumento na própria moldura, como etiqueta de
-            equipamento. "A chamada está boa?" é pergunta permanente numa
-            conversa, e permanente é o que fica na moldura — não o que
-            aparece quando alguém vai procurar. */}
-        {room && status === 'open' && peerCount > 0 && (
-          <span className="tm-titlebar__meters">
-            {rttMs > 0 && (
-              <span
-                className={`tm-meter num${rttMs > 150 ? ' is-warn' : ''}`}
-                title="Pior latência da sala"
-              >
-                {rttMs} ms
-              </span>
-            )}
-            {voiceConcealed > 0.01 && (
-              <span
-                className="tm-meter num is-warn"
-                title="Parte da voz que o seu computador teve que reconstruir — é isso que soa como travando"
-              >
-                voz {(voiceConcealed * 100).toFixed(0)}%
-              </span>
-            )}
+        {/* Só a latência, e sem cor.
+            A saúde da voz morava aqui e saiu: um número que pisca em
+            amarelo no alto da tela pede atenção o tempo todo, e isso é
+            caro demais para algo que só interessa quando alguém reclama.
+            Ele continua na régua de diagnóstico, onde se vai procurar. */}
+        {room && status === 'open' && peerCount > 0 && rttMs > 0 && (
+          <span className="tm-meter num" title="Pior latência da sala">
+            {rttMs} ms
           </span>
         )}
 

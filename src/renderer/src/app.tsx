@@ -84,6 +84,21 @@ function isLeftoverServer(server: string): boolean {
   return /^wss?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(server.trim())
 }
 
+/**
+ * "goals.exe" vira "Goals".
+ *
+ * O nome do executavel e um detalhe de implementacao do Windows, e
+ * mostrar a extensao ao lado do rosto de alguem faz a sala parecer um
+ * gerenciador de tarefas. Nao tento adivinhar nomes comerciais: traduzir
+ * "javaw.exe" para "Minecraft" acerta um caso e erra todos os outros.
+ */
+function prettyApp(executable: string | null): string | null {
+  if (!executable) return null
+  const base = executable.replace(/\.exe$/i, '').replace(/[-_]+/g, ' ').trim()
+  if (base.length === 0) return null
+  return base.charAt(0).toUpperCase() + base.slice(1)
+}
+
 function loadDefaults(): JoinDetails {
   const fallback: JoinDetails = { name: '', room: '', server: '' }
   try {
@@ -584,6 +599,38 @@ export function App(): JSX.Element {
     }
   }, [settings.pushToTalk, settings.pushToTalkKey, snapshot.local.mic])
 
+  /**
+   * Conta a sala o que voce esta fazendo.
+   *
+   * De tres em tres segundos: rapido o bastante para "entrou no jogo"
+   * aparecer enquanto ainda interessa, devagar o bastante para ser uma
+   * chamada de sistema barata que ninguem percebe. A sessao so reanuncia
+   * quando o valor muda.
+   *
+   * Nulo quando o Mirante esta em foco, porque "esta usando o Mirante" nao
+   * e atividade — quem esta na sala ja sabe disso.
+   */
+  useEffect(() => {
+    if (!joined) return
+    let parado = false
+    const ler = async (): Promise<void> => {
+      try {
+        const app = await window.mirante.activity.foreground()
+        if (!parado) session.setActivity(prettyApp(app))
+      } catch {
+        // Addon ausente ou plataforma sem suporte. Atividade e enfeite;
+        // falhar nela nao pode custar nada ao resto.
+      }
+    }
+    void ler()
+    const id = window.setInterval(() => void ler(), 3000)
+    return () => {
+      parado = true
+      window.clearInterval(id)
+      session.setActivity(null)
+    }
+  }, [joined])
+
   // Echo suppression is a live rewiring, and the reference has to be
   // re-attached whenever the mixer's context is rebuilt under it.
   useEffect(() => {
@@ -990,7 +1037,6 @@ export function App(): JSX.Element {
     <div className={`tm-shell tm-shell--${mode} tm-shell--rail-${settings.railPosition}`}>
       <TitleBar
         rttMs={Math.max(0, ...snapshot.peers.map((p) => p.stats.rttMs))}
-        voiceConcealed={Math.max(0, ...snapshot.peers.map((p) => p.stats.voiceConcealed))}
         room={joined.room}
         status={snapshot.status}
         peerCount={snapshot.peers.length}

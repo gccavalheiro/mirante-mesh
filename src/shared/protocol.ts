@@ -92,6 +92,18 @@ export interface PeerPublishState {
   screen: boolean
   camera: boolean
   mic: boolean
+  /**
+   * O que a pessoa esta fazendo fora do Mirante, pelo nome do programa em
+   * primeiro plano.
+   *
+   * Viaja junto do estado de publicacao porque usa o mesmo caminho: muda
+   * de vez em quando, e todo mundo na sala precisa saber. Criar um verbo
+   * proprio para isso seria duplicar um broadcast que ja existe.
+   *
+   * Ausente quando o Mirante esta em foco — "esta usando o Mirante" nao e
+   * atividade — e quando a pessoa desligou isso.
+   */
+  activity?: string
   /** Set when the peer is sharing a screen: lets viewers label the stage. */
   screenLabel?: string
   /**

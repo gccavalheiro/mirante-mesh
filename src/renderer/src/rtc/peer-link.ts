@@ -783,7 +783,13 @@ export class PeerLink {
         entry.kind === 'audio' &&
         VOICE_MIDS.includes(String(entry.mid ?? ''))
       ) {
-        concealed += (entry.concealedSamples as number) ?? 0
+        // Descontado o silencio. O NetEq tambem "reconstroi" quando nao ha
+        // ninguem falando — mantendo o conforto da linha viva — e contar
+        // isso como voz quebrada marcava 59% numa sala em que todo mundo
+        // estava calado. `silentConcealedSamples` e exatamente essa parte.
+        concealed +=
+          ((entry.concealedSamples as number) ?? 0) -
+          ((entry.silentConcealedSamples as number) ?? 0)
         voiceSamples += (entry.totalSamplesReceived as number) ?? 0
         voicePackets += (entry.packetsReceived as number) ?? 0
         voiceLost += (entry.packetsLost as number) ?? 0

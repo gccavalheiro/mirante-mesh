@@ -31,6 +31,7 @@ export interface AudioApp {
 
 interface NativeModule {
   /** Teclado global, com soltar. Ausente em addon antigo. */
+  foregroundApp?: () => string | null
   startKeyWatch?: (onKey: (vk: number, down: boolean) => void) => void
   stopKeyWatch?: () => void
   isSupported: () => boolean
@@ -152,6 +153,16 @@ export interface AudioCapability {
  * com as mesmas tres tentativas. Duplicar esse carregamento so para uma
  * funcao seria duplicar tambem as tres formas de ele nao estar la.
  */
+/**
+ * Que programa esta em primeiro plano, pelo nome do executavel.
+ *
+ * Para a sala mostrar "jogando Goals" ao lado de quem esta jogando. Nulo
+ * quando o Mirante esta em foco, ou quando o addon nao carregou.
+ */
+export function foregroundApp(): string | null {
+  return loadNative()?.foregroundApp?.() ?? null
+}
+
 export function startKeyWatch(onKey: (vk: number, down: boolean) => void): boolean {
   const mod = loadNative()
   if (!mod?.startKeyWatch) return false

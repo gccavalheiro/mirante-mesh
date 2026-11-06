@@ -11,6 +11,7 @@ import {
 import { cancelPendingCapture, registerCapture } from './capture'
 import { log, startLogging } from './log'
 import {
+  foregroundApp,
   registerProcessAudio,
   startKeyWatch,
   stopKeyWatch,
@@ -221,6 +222,7 @@ void app.whenReady().then(() => {
   registerCapture()
   registerProcessAudio(mainWindow)
   registerLobby()
+  ipcMain.handle('activity:foreground', (): string | null => foregroundApp())
   registerPushToTalk(mainWindow)
   registerHotkeys()
   registerOverlay(mainWindow)

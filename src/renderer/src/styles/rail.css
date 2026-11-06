@@ -166,6 +166,34 @@
   overflow: hidden;
 }
 
+/* O pé cresce SÓ quando há atividade para mostrar.
+   A altura do trilho é calculada a partir dele (ver tokens.css), então
+   crescer sempre esticaria a coluna de todo mundo por uma linha que, na
+   maior parte do tempo, está vazia. */
+.tm-tile__foot.has-activity {
+  height: auto;
+  min-height: var(--tile-foot-h);
+  padding-top: 3px;
+  padding-bottom: 4px;
+}
+
+.tm-tile__who {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+/* Menor e mais apagada: o nome é quem, isto é só o que ela está fazendo. */
+.tm-tile__activity {
+  font-size: var(--text-nano);
+  color: var(--text-muted);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tm-tile__name {
   /* Zero flex-basis: the name's own width must never become the floor. */
   flex: 1 1 0;

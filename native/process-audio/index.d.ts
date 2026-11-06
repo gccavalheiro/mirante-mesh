@@ -50,6 +50,15 @@ export interface CaptureFormat {
  */
 export declare function startKeyWatch(onKey: (vk: number, down: boolean) => void): void
 export declare function stopKeyWatch(): void
+/**
+ * Que programa esta em primeiro plano agora, por nome do executavel.
+ *
+ * Para a sala mostrar "jogando goals.exe" ao lado de quem esta jogando,
+ * que e o que faz uma lista de pessoas parecer viva em vez de um
+ * cadastro. Devolve nulo quando a janela em foco e do proprio Mirante:
+ * "esta usando o Mirante" nao e atividade.
+ */
+export declare function foregroundApp(): string | null
 export declare function isSupported(): boolean
 /**
  * Enumerate processes that currently own an audio session.

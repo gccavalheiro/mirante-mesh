@@ -72,6 +72,10 @@ export interface MiranteApi {
    * So para push-to-talk. A tecla nunca e engolida: isto escuta, nao
    * intercepta, ou ela deixaria de chegar ao jogo onde foi pressionada.
    */
+  /** O programa em primeiro plano, para a sala mostrar o que voce faz. */
+  activity: {
+    foreground: () => Promise<string | null>
+  }
   keys: {
     watch: () => Promise<boolean>
     unwatch: () => Promise<void>
@@ -164,6 +168,9 @@ const api: MiranteApi = {
   },
   hotkeys: {
     on: (key, handler) => subscribe(`hotkey:${key}`, () => handler())
+  },
+  activity: {
+    foreground: () => ipcRenderer.invoke('activity:foreground') as Promise<string | null>
   },
   keys: {
     watch: () => ipcRenderer.invoke('keys:watch') as Promise<boolean>,

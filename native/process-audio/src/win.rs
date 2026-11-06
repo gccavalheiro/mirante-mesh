@@ -21,7 +21,7 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
     TH32CS_SNAPPROCESS,
 };
-use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
 use windows::Win32::Media::Audio::{
     eConsole, eRender, ActivateAudioInterfaceAsync, AudioSessionStateActive,
     IActivateAudioInterfaceAsyncOperation, IActivateAudioInterfaceCompletionHandler,
@@ -317,6 +317,30 @@ pub fn list_audio_apps() -> WinResult<Vec<crate::AudioApp>> {
         });
         Ok(apps)
     }
+}
+
+/// O executavel da janela em primeiro plano.
+///
+/// Compoe duas coisas que ja existiam aqui: a janela em foco e o
+/// executavel de um pid. O custo e uma chamada de sistema, o que importa
+/// porque isto e consultado de poucos em poucos segundos enquanto o app
+/// estiver aberto.
+///
+/// Retorna None quando a janela em foco e do proprio Mirante — "esta
+/// usando o Mirante" nao e atividade, e o que as pessoas querem ver e o
+/// que o amigo esta fazendo em vez de conversar.
+pub fn foreground_executable(own_pid: u32) -> Option<String> {
+    // SAFETY: GetForegroundWindow devolve zero quando nao ha janela ativa,
+    // e pid_for_window trata handle invalido.
+    let hwnd = unsafe { GetForegroundWindow() };
+    if hwnd.0.is_null() {
+        return None;
+    }
+    let pid = pid_for_window(hwnd.0 as isize)?;
+    if pid == own_pid {
+        return None;
+    }
+    executable_for_pid(pid)
 }
 
 pub fn executable_for_pid(pid: u32) -> Option<String> {

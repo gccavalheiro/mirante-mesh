@@ -138,6 +138,24 @@ pub fn stop_key_watch() {
     keys::stop();
 }
 
+/// Que programa esta em primeiro plano agora, por nome do executavel.
+///
+/// Para a sala mostrar "jogando goals.exe" ao lado de quem esta jogando,
+/// que e o que faz uma lista de pessoas parecer viva em vez de um
+/// cadastro. Devolve nulo quando a janela em foco e do proprio Mirante:
+/// "esta usando o Mirante" nao e atividade.
+#[napi]
+pub fn foreground_app() -> Option<String> {
+    #[cfg(windows)]
+    {
+        backend::foreground_executable(std::process::id())
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 #[napi]
 pub fn is_supported() -> bool {
     #[cfg(windows)]

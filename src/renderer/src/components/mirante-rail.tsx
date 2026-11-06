@@ -174,6 +174,14 @@ interface TileProps {
   /** Right-hand element of the foot. Every tile reserves this slot, so names
       line up across the rail whatever the tile is showing. */
   slot: ReactNode
+  /**
+   * O que a pessoa está fazendo fora do Mirante.
+   *
+   * Segunda linha sob o nome, menor e mais apagada: hierarquia por peso e
+   * cor, não por tamanho, que é o que mantém a linha legível sem competir
+   * com quem ela descreve.
+   */
+  activity?: string
   /** Overlay pinned inside the frame, e.g. the "você" mark or a share badge. */
   corner?: ReactNode
   mirrored?: boolean
@@ -219,6 +227,7 @@ function Tile({
   label,
   onFocus,
   slot,
+  activity,
   corner,
   mirrored = false,
   onAdjust,
@@ -327,8 +336,11 @@ function Tile({
         {corner}
       </div>
 
-      <div className="tm-tile__foot">
-        <span className="tm-tile__name">{name}</span>
+      <div className={`tm-tile__foot${activity ? ' has-activity' : ''}`}>
+        <span className="tm-tile__who">
+          <span className="tm-tile__name">{name}</span>
+          {activity && <span className="tm-tile__activity">{activity}</span>}
+        </span>
         {slot}
       </div>
 
@@ -386,6 +398,7 @@ function PeerTile({
       hue={peer.info.hue}
       stream={peer.camera}
       active={active}
+      activity={peer.state.activity}
       level={live ? () => mixer.level(peer.info.id) : undefined}
       adjusted={peer.audible ? peer.audio.volume : undefined}
       label={inviting ? `Assistir ${peer.info.name}` : `Ver ${peer.info.name}`}
