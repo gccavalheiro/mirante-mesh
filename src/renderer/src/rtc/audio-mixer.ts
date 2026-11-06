@@ -83,6 +83,16 @@ export class AudioMixer {
   private readonly contentOn = new Set<string>()
   private masterVolume = 1
   private outputDevice = ''
+  /**
+   * Everything this machine is playing of other people, as a stream.
+   *
+   * The echo suppressor needs to know what came out of the speakers, and
+   * this is it — tapped after the master gain, so it carries exactly what
+   * the room heard. Taken from here rather than from a system loopback
+   * because the only echo we can honestly claim to cancel is the one we
+   * caused: audio from other applications is not ours to model.
+   */
+  private referenceTap: MediaStreamAudioDestinationNode | null = null
 
   /**
    * Must be called from a user gesture the first time, or the AudioContext
@@ -94,6 +104,8 @@ export class AudioMixer {
       this.master = this.context.createGain()
       this.master.gain.value = this.masterVolume
       this.master.connect(this.context.destination)
+      this.referenceTap = this.context.createMediaStreamDestination()
+      this.master.connect(this.referenceTap)
       // The chosen device has to be applied to a context that did not exist
       // when the setting was read. Without this, picking an output before
       // anyone speaks is forgotten the moment the context is finally built.
@@ -302,6 +314,17 @@ export class AudioMixer {
     const rms = Math.sqrt(sum / channel.buffer.length)
     // Perceptual curve: raw RMS barely moves for normal speech.
     return Math.min(1, rms * 3.2)
+  }
+
+  /**
+   * What everyone else sounds like, for the echo suppressor to subtract.
+   *
+   * Null until someone has sent audio, because the context itself is built
+   * lazily. Callers re-read it rather than caching: a mixer that was silent
+   * when the microphone opened will have a tap a second later.
+   */
+  reference(): MediaStream | null {
+    return this.referenceTap?.stream ?? null
   }
 
   /**

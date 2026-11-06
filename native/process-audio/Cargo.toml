@@ -15,8 +15,7 @@ parking_lot = "0.12"
 # Pure Rust, builds under MSVC. The WebRTC APM (AEC3) does not: its CI runs
 # only ubuntu and macos, with "Windows build" and "Support MSVC targets"
 # both open. See docs/krisp-teardown.md.
-realfft = "3.5"
-rustfft = "6.4"
+mirante-echo = { path = "../echo" }
 
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.58"

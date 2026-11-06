@@ -33,6 +33,15 @@ export interface Settings {
    */
   noiseSuppression: NoiseSuppression
   /**
+   * Remove dos amigos a própria voz, quando ela volta pelo seu microfone.
+   *
+   * Caixa de som mais microfone na mesma sala devolve a conversa inteira
+   * para quem está falando. Medido na montagem que motivou isto, a voz do
+   * usuário fica 5,2 dB acima desse retorno — separação que nenhum limiar
+   * resolve. O que resolve é saber O QUE foi tocado, e isso o app sabe.
+   */
+  echoCancel: boolean
+  /**
    * Your own microphone level, 0..2.
    *
    * Everyone could already turn everyone else up or down and nobody could
@@ -111,6 +120,10 @@ export const DEFAULT_SETTINGS: Settings = {
   speakerId: '',
   masterVolume: 1,
   noiseSuppression: 'strong',
+  // DESLIGADO ate a reconstrucao estar correta. Medido com referencia
+  // silenciosa — ninguem tocando — o supressor tira 18 dB de um microfone
+  // limpo, o que atingiria todo mundo que nao tem eco nenhum.
+  echoCancel: false,
   micGain: 1,
   roomSounds: true,
   defaultProfile: 'smooth',

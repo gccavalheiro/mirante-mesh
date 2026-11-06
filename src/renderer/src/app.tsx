@@ -30,6 +30,8 @@ import { resolveServer } from './lib/server'
 import { broadcastLoad } from './rtc/peer-link'
 import {
   closeMic,
+  setEchoCancel,
+  setEchoReference,
   micDeviceId,
   needsReopen,
   openMic,
@@ -365,8 +367,14 @@ export function App(): JSX.Element {
       return
     }
     try {
-      const { microphoneId, noiseSuppression, micGain } = getSettings()
-      await session.setMic(await openMic(microphoneId, noiseSuppression, micGain))
+      const { microphoneId, noiseSuppression, micGain, echoCancel } = getSettings()
+      await session.setMic(
+        await openMic(microphoneId, noiseSuppression, micGain, echoCancel)
+      )
+      // The mixer builds its context on the first peer who sends audio, so
+      // its tap usually does not exist yet when the microphone opens. The
+      // effect below attaches it when it does.
+      setEchoReference(session.mixer.reference())
     } catch (error) {
       console.warn('[media] microphone denied:', error)
     }
@@ -465,10 +473,16 @@ export function App(): JSX.Element {
         if (reopen) {
           await session.swapDevice(
             'mic',
-            await openMic(settings.microphoneId, level, settings.micGain)
+            await openMic(
+              settings.microphoneId,
+              level,
+              settings.micGain,
+              settings.echoCancel
+            )
           )
+          setEchoReference(session.mixer.reference())
         } else {
-          await setNoiseSuppression(level)
+          await setNoiseSuppression(level, settings.echoCancel)
         }
       } catch (error) {
         console.warn('[settings] could not switch microphone:', error)
@@ -476,6 +490,15 @@ export function App(): JSX.Element {
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.microphoneId, settings.noiseSuppression])
+
+  // Echo suppression is a live rewiring, and the reference has to be
+  // re-attached whenever the mixer's context is rebuilt under it.
+  useEffect(() => {
+    if (!snapshot.local.mic) return
+    setEchoReference(session.mixer.reference())
+    void setEchoCancel(settings.echoCancel, settings.noiseSuppression)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.echoCancel, snapshot.local.mic, snapshot.peers.length])
 
   // The level is a live parameter, so it never touches the track.
   useEffect(() => {

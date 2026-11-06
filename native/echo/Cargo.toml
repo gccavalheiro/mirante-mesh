@@ -1,0 +1,16 @@
+[package]
+name = "mirante-echo"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Dois alvos consomem isto: o addon napi no Windows e um modulo WebAssembly
+# que roda dentro de um AudioWorklet. Por isso o DSP vive separado, sem
+# nenhuma dependencia de plataforma — napi nao compila para wasm, e windows
+# muito menos.
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+realfft = "3.5"
+rustfft = "6.4"

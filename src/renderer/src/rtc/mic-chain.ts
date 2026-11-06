@@ -1,3 +1,5 @@
+import echoUrl from './echo-worklet.ts?worker&url'
+import { ECHO_WASM_BASE64 } from './echo-wasm'
 import rnnoiseUrl from './rnnoise-worklet.ts?worker&url'
 
 /**
@@ -16,9 +18,15 @@ import rnnoiseUrl from './rnnoise-worklet.ts?worker&url'
  *       → source
  *       → highpass 80 Hz
  *       → gain            ← your input level
+ *       → [echo]          ← with the mixer's output as a second input
  *       → [rnnoise]       ← only on "forte"
  *       → analyser        ← the ring on your tile, the meter in settings
  *       → destination     → the track that is actually sent
+ *
+ * Echo before noise, because they are different problems and the order
+ * matters: what the speakers put back into the microphone is speech, and a
+ * noise suppressor preserves speech by construction. RNNoise would hand it
+ * along untouched. Remove the echo first, then denoise what is left.
  *
  * The chain exists whenever the microphone is on, not only when something
  * in it is non-default. One topology is worth more than the handful of
@@ -77,6 +85,9 @@ interface Chain {
   source: MediaStreamAudioSourceNode
   highpass: BiquadFilterNode
   gain: GainNode
+  echo: AudioWorkletNode | null
+  /** The mixer's output, bridged into this context as the echo reference. */
+  echoReference: MediaStreamAudioSourceNode | null
   rnnoise: AudioWorkletNode | null
   analyser: AnalyserNode
   destination: MediaStreamAudioDestinationNode
@@ -97,6 +108,28 @@ interface Chain {
 
 let chain: Chain | null = null
 let workletReady: Promise<boolean> | null = null
+let echoReady: Promise<boolean> | null = null
+
+/** The wasm bytes, decoded once. */
+function echoBytes(): ArrayBuffer {
+  const bin = atob(ECHO_WASM_BASE64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return bytes.buffer
+}
+
+async function ensureEchoModule(context: AudioContext): Promise<boolean> {
+  if (!echoReady) {
+    echoReady = context.audioWorklet
+      .addModule(echoUrl)
+      .then(() => true)
+      .catch((error: unknown) => {
+        console.warn('[mic] supressor de eco indisponível:', error)
+        return false
+      })
+  }
+  return echoReady
+}
 
 /**
  * Load the RNNoise module once per AudioContext.
@@ -127,7 +160,8 @@ async function ensureWorklet(context: AudioContext): Promise<boolean> {
 export async function openMic(
   deviceId: string,
   level: NoiseSuppression,
-  gain: number
+  gain: number,
+  echoCancel = false
 ): Promise<MediaStream> {
   // Acquire BEFORE tearing down. Closing first and then failing to open —
   // a virtual camera's microphone still listed after its phone walked off,
@@ -178,6 +212,8 @@ export async function openMic(
     source,
     highpass,
     gain: gainNode,
+    echo: null,
+    echoReference: null,
     rnnoise: null,
     analyser,
     destination,
@@ -189,7 +225,7 @@ export async function openMic(
 
   source.connect(highpass)
   highpass.connect(gainNode)
-  await route(level)
+  await route(level, echoCancel)
 
   return out
 }
@@ -200,7 +236,7 @@ export async function openMic(
  * Only the segment after `gain` ever changes, so the source, the filter and
  * the level survive a change of setting untouched.
  */
-async function route(level: NoiseSuppression): Promise<void> {
+async function route(level: NoiseSuppression, echo: boolean): Promise<void> {
   if (!chain) return
   const current = chain
   const { context, gain, analyser, destination } = current
@@ -222,24 +258,84 @@ async function route(level: NoiseSuppression): Promise<void> {
     }
   }
 
+  if (echo && !current.echo && (await ensureEchoModule(context))) {
+    if (chain !== current) return
+    try {
+      const node = new AudioWorkletNode(context, 'echo', {
+        // Two inputs: the microphone, and what we are playing. The second
+        // is the whole reason this works — with 5 dB between the user's
+        // voice and the echo, knowing WHAT was played is the only thing
+        // that separates them.
+        numberOfInputs: 2,
+        numberOfOutputs: 1,
+        outputChannelCount: [1]
+      })
+      node.port.postMessage(
+        { tipo: 'wasm', bytes: echoBytes(), taxa: context.sampleRate },
+        // Transferred, not copied: 287 KB crossing to the audio thread.
+        []
+      )
+      current.echo = node
+    } catch (error) {
+      console.warn('[mic] supressor de eco não pôde ser criado:', error)
+    }
+  }
+
   if (chain !== current) return
 
   gain.disconnect()
+  current.echo?.disconnect()
   current.rnnoise?.disconnect()
 
-  if (level === 'strong' && current.rnnoise) {
-    gain.connect(current.rnnoise)
-    current.rnnoise.connect(analyser)
-  } else {
-    gain.connect(analyser)
+  // Echo first, then noise. They are different problems, and the order is
+  // not arbitrary: what the speakers put back into the microphone is
+  // speech, and a noise suppressor preserves speech by construction.
+  let tail: AudioNode = gain
+  if (echo && current.echo) {
+    gain.connect(current.echo, 0, 0)
+    current.echoReference?.connect(current.echo, 0, 1)
+    tail = current.echo
   }
+  if (level === 'strong' && current.rnnoise) {
+    tail.connect(current.rnnoise)
+    tail = current.rnnoise
+  }
+  tail.connect(analyser)
   analyser.connect(destination)
 }
 
-/** Change the level on a live microphone, without replacing the track. */
-export async function setNoiseSuppression(level: NoiseSuppression): Promise<void> {
+/**
+ * Give the suppressor the other side of the conversation.
+ *
+ * Called when the mixer finally has a context to tap — which is later than
+ * the microphone opening, because the mixer is built lazily on the first
+ * peer who sends audio. Until then the suppressor runs with a silent
+ * reference, which costs nothing and suppresses nothing.
+ */
+export function setEchoReference(stream: MediaStream | null): void {
   if (!chain) return
-  await route(level)
+  if (chain.echoReference) {
+    chain.echoReference.disconnect()
+    chain.echoReference = null
+  }
+  if (!stream || stream.getAudioTracks().length === 0) return
+  chain.echoReference = chain.context.createMediaStreamSource(stream)
+  if (chain.echo) chain.echoReference.connect(chain.echo, 0, 1)
+}
+
+/** Turn echo suppression on or off on a live chain. */
+export async function setEchoCancel(on: boolean, level: NoiseSuppression): Promise<void> {
+  if (!chain) return
+  await route(level, on)
+}
+
+/** Change the level on a live microphone, without replacing the track. */
+export async function setNoiseSuppression(
+  level: NoiseSuppression,
+  echoCancel: boolean
+): Promise<void> {
+  if (!chain) return
+  await route(level, echoCancel)
 }
 
 /**
@@ -329,6 +425,8 @@ export function closeMic(): void {
   for (const track of chain.raw.getTracks()) track.stop()
   for (const track of chain.out.getTracks()) track.stop()
   if (chain.monitoring) chain.analyser.disconnect(chain.context.destination)
+  chain.echo?.disconnect()
+  chain.echoReference?.disconnect()
   chain.source.disconnect()
   chain.gain.disconnect()
   chain.rnnoise?.disconnect()

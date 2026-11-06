@@ -58,8 +58,11 @@ const PROFILE_HINTS: Record<ScreenProfileName, string> = {
  */
 const TABS = [
   { id: 'devices', label: 'Dispositivos' },
-  { id: 'broadcast', label: 'Transmissão' },
+  // Áudio vem logo depois, e não depois de Transmissão: escolher o
+  // microfone e ajustar o microfone são a mesma conversa, e havia uma aba
+  // inteira sobre outro assunto separando as duas metades dela.
   { id: 'audio', label: 'Áudio' },
+  { id: 'broadcast', label: 'Transmissão' },
   { id: 'interface', label: 'Interface' },
   { id: 'advanced', label: 'Avançado' }
 ] as const
@@ -243,6 +246,22 @@ export function SettingsModal({
           {tab === 'audio' && (
             <>
               <Group title="Sua voz">
+                {/* O mesmo seletor que existe em Dispositivos, aqui também.
+                    Não é duplicação à toa: tudo nesta aba descreve o que
+                    acontece com o microfone, e mandar alguém a outra aba
+                    para trocar QUAL microfone é mandar embora no meio do
+                    ajuste. Os dois leem e escrevem a mesma configuração. */}
+                <Row label="Microfone" hint="De onde a sua voz sai.">
+                  <Picker
+                    value={settings.microphoneId}
+                    onChange={(microphoneId) => updateSettings({ microphoneId })}
+                    options={devices.microphones.map((d, i) => ({
+                      value: d.deviceId,
+                      label: deviceLabel(d, i, 'Microfone')
+                    }))}
+                  />
+                </Row>
+
                 <Row
                   label="Volume do seu microfone"
                   hint="Como você chega nos outros. A barra mostra o que está sendo enviado."
@@ -276,6 +295,16 @@ export function SettingsModal({
                     onChange={(on) =>
                       updateSettings({ noiseSuppression: on ? 'strong' : 'standard' })
                     }
+                  />
+                </Row>
+
+                <Row
+                  label="Cancelar o retorno da caixa de som"
+                  hint="Se você ouve seus amigos em caixa, eles param de se ouvir de volta pelo seu microfone."
+                >
+                  <Toggle
+                    checked={settings.echoCancel}
+                    onChange={(echoCancel) => updateSettings({ echoCancel })}
                   />
                 </Row>
 

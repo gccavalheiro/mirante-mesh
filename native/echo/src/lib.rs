@@ -112,6 +112,14 @@ pub struct EchoSuppressor {
     /// What the previous frame left for this one. One hop long.
     out_overlap: Vec<f32>,
 
+    /// Janela deslizante da REFERENCIA, dela e de mais ninguem.
+    ///
+    /// Compartilhava `scratch_time` com a saida da IFFT, e os dois se
+    /// sobrescreviam a cada bloco. Com referencia silenciosa o buffer
+    /// passava a conter a saida do proprio microfone, a energia de
+    /// referencia deixava de ser zero, e o supressor cancelava a voz contra
+    /// ela mesma: 18 dB sumindo de um microfone limpo, sem ninguem tocando.
+    ref_in: Vec<f32>,
     scratch_time: Vec<f32>,
     scratch_spec: Vec<Complex32>,
 
@@ -154,6 +162,7 @@ impl EchoSuppressor {
             delay_frames: 0,
             mic_in: Vec::with_capacity(WINDOW),
             out_overlap: vec![0.0; HOP],
+            ref_in: vec![0.0; WINDOW],
             scratch_time: vec![0.0; WINDOW],
             scratch_spec: vec![Complex32::new(0.0, 0.0); BINS],
             energy_in: 0.0,
@@ -179,11 +188,11 @@ impl EchoSuppressor {
     /// shifts every delay estimate that follows it.
     pub fn push_reference(&mut self, hop: &[f32]) {
         debug_assert_eq!(hop.len(), HOP);
-        self.scratch_time.copy_within(HOP.., 0);
-        self.scratch_time[HOP..].copy_from_slice(hop);
+        self.ref_in.copy_within(HOP.., 0);
+        self.ref_in[HOP..].copy_from_slice(hop);
 
         let mut framed: Vec<f32> = self
-            .scratch_time
+            .ref_in
             .iter()
             .zip(&self.window)
             .map(|(x, w)| x * w)
@@ -270,8 +279,15 @@ impl EchoSuppressor {
                 // entao eco plausivel e limitado pelo nivel da referencia.
                 // Microfone muito acima disso e voz de perto, nao eco, e e
                 // ai que adaptar ensinaria o filtro a prever o usuario.
+                // O fator e generoso de proposito. A referencia e o sinal
+                // DIGITAL que tocamos; o microfone e o que sobrou depois do
+                // alto falante, da sala e do ganho automatico do celular,
+                // que amplifica. Medido nesta montagem, o microfone chega
+                // cerca de 16 dB acima da referencia — com fator 4 (12 dB) o
+                // portao nunca abria e a supressao real caiu para 0,6 dB.
+                // Fala de perto ainda fica muito acima disto.
                 let nivel_ref = (ref_energy / TAPS as f32).sqrt();
-                if mic_mag <= 4.0 * nivel_ref {
+                if mic_mag <= 32.0 * nivel_ref {
                     let err = mic_mag - predicted;
                     let norm = ref_energy + 1e-6;
                     for j in 0..TAPS {

@@ -1,0 +1,16 @@
+[package]
+name = "mirante-echo-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+mirante-echo = { path = "../echo" }
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"
