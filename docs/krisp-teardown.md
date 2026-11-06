@@ -190,6 +190,47 @@ variantes personalizadas de DeepFilterNet — mas é a parte de pesquisa, não a
 de integração. Prometer paridade com um modelo de 15 MB treinado com os dados
 do Krisp seria desonesto.
 
+## Restrição de plataforma, descoberta ao escolher as peças
+
+O Mirante compila para `x86_64-pc-windows-msvc`. Isso elimina a opção óbvia.
+
+**`webrtc-audio-processing` (AEC3) não serve.** É o wrapper Rust do APM do
+WebRTC — o mesmo cancelador que o Chrome usa. A CI do projeto roda apenas
+`ubuntu-latest` e `macos-latest`, e há duas issues **abertas**: "Windows
+build" e "Support MSVC targets, and fix Apple cross-compilation, in bundled
+builds". Não dá para depender disso.
+
+O que sobra, e que compila em MSVC sem drama, é Rust puro:
+
+```
+deep_filter   0.2.5   1 257 061 downloads   DeepFilterNet dos proprios autores
+rustfft       6.4.1  35 510 810 downloads
+realfft       3.5.1  20 123 625 downloads
+nnnoiseless   0.5.2   1 103 119 downloads   RNNoise em Rust
+```
+
+`speexdsp` existe mas são bindings para a biblioteca C, com 4 882 downloads —
+trazer uma dependência C para o Windows em troca de um AEC mais fraco que o
+AEC3 é o pior dos dois mundos.
+
+### A consequência: supressão em vez de cancelamento
+
+Sem AEC3, cancelar por subtração exige escrever o filtro adaptativo do zero.
+E aqui vale olhar de novo para o caso real antes de escolher: o problema **não
+é a referência**, que temos limpa pelo loopback. É o **atraso de captura**, que
+num celular por Wi-Fi varia de 100 a 300 ms. Um cancelador precisa alinhar isso
+com precisão de amostras. Um supressor não.
+
+Então a peça certa para este caso é **supressão de eco guiada pela referência**:
+usar o espectro do que tocamos, sobre uma janela larga o bastante para cobrir
+todo o atraso plausível, para atenuar os bins do microfone que casam com
+energia da referência. Tolera erro de atraso por construção, que é exatamente
+onde o cancelador quebra. Custa artefato durante fala simultânea, e isso é
+mensurável.
+
+Com estimativa grosseira de atraso por GCC-PHAT para centrar a janela, e ERLE
+medido em dB para saber se funcionou.
+
 ### Ordem defensável
 
 1. **AEC nativo com referência por loopback.** Ataca a causa real do caso
