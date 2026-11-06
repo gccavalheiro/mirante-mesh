@@ -10,7 +10,8 @@ import {
   type DeviceList
 } from '../lib/settings'
 import { formatVolume } from '../lib/format'
-import { micLevel, setMonitor } from '../rtc/mic-chain'
+import type { PeerView } from '../rtc/mesh-session'
+import { echoAttenuationDb, micLevel, setMonitor } from '../rtc/mic-chain'
 import { SCREEN_PROFILES, type ScreenProfileName } from '../rtc/sdp'
 import { IconClose } from './icons'
 import { ShortcutField } from './shortcut-field'
@@ -30,6 +31,8 @@ import { ShortcutField } from './shortcut-field'
 interface SettingsModalProps {
   /** Overlay shortcuts another application already owns. */
   takenShortcuts: Array<'toggle' | 'interact'>
+  /** Quem está na sala, para o diagnóstico ler a saúde da voz deles. */
+  peers: PeerView[]
   version: string
   onClose: () => void
   /** Open the camera picker, where the background is chosen with a live preview. */
@@ -71,6 +74,7 @@ type TabId = (typeof TABS)[number]['id']
 
 export function SettingsModal({
   takenShortcuts,
+  peers,
   version,
   onClose,
   onAdjustCamera
@@ -318,6 +322,8 @@ export function SettingsModal({
                 </Row>
               </Group>
 
+              <Diagnostico peers={peers} />
+
               <Group title="O que você escuta">
             <Row label="Volume geral" hint="Afeta todo mundo de uma vez.">
               <div className="tm-setting__slider">
@@ -495,6 +501,88 @@ function MicMeter(): JSX.Element {
   return (
     <div className="tm-micmeter">
       <span ref={barRef} className="tm-micmeter__fill" />
+    </div>
+  )
+}
+
+/**
+ * O que está acontecendo com o áudio, em números, ao vivo.
+ *
+ * A tela tinha controles e nenhuma leitura: dizia que a supressão estava
+ * ligada e não mostrava um decibel. Isso não passa confiança porque não
+ * dá para conferir nada — e as duas perguntas reais ("o que eu mando está
+ * bom?" e "por que a voz do fulano trava?") têm respostas medidas que o
+ * app já calcula e jogava fora.
+ *
+ * Atualiza devagar de propósito. Número que pisca a sessenta quadros por
+ * segundo é decoração; este é instrumento.
+ */
+function Diagnostico({ peers }: { peers: PeerView[] }): JSX.Element {
+  const [, redesenhar] = useState(0)
+  useEffect(() => {
+    const id = window.setInterval(() => redesenhar((n) => n + 1), 700)
+    return () => window.clearInterval(id)
+  }, [])
+
+  const atenuacao = echoAttenuationDb()
+  // A pior voz da sala é a que define se "está travando". Média esconderia
+  // exatamente a pessoa de quem se reclama.
+  const pior = peers
+    .filter((p) => p.stats.voiceConcealed > 0)
+    .sort((a, b) => b.stats.voiceConcealed - a.stats.voiceConcealed)[0]
+
+  return (
+    <Group title="Diagnóstico">
+      <Leitura
+        rotulo="Eco removido"
+        valor={atenuacao > 0.1 ? `${atenuacao.toFixed(1)} dB` : '—'}
+        nota={atenuacao > 0.1 ? 'do que sai do seu microfone' : 'sem eco detectado'}
+      />
+      <Leitura
+        rotulo="Voz reconstruída"
+        valor={pior ? `${(pior.stats.voiceConcealed * 100).toFixed(1)}%` : '—'}
+        nota={
+          pior
+            ? `pior caso: ${pior.info.name}. Acima de 3% já se ouve como travada.`
+            : 'ninguém falando, ou nada se perdendo'
+        }
+        alerta={(pior?.stats.voiceConcealed ?? 0) > 0.03}
+      />
+      <Leitura
+        rotulo="Buffer da voz"
+        valor={pior && pior.stats.voiceBufferMs > 0 ? `${pior.stats.voiceBufferMs} ms` : '—'}
+        nota="quanto o seu computador segura antes de tocar"
+      />
+      <Leitura
+        rotulo="Perda na voz"
+        valor={pior ? `${(pior.stats.voiceLoss * 100).toFixed(1)}%` : '—'}
+        nota="pacotes que não chegaram"
+        alerta={(pior?.stats.voiceLoss ?? 0) > 0.02}
+      />
+    </Group>
+  )
+}
+
+function Leitura({
+  rotulo,
+  valor,
+  nota,
+  alerta = false
+}: {
+  rotulo: string
+  valor: string
+  nota: string
+  alerta?: boolean
+}): JSX.Element {
+  return (
+    <div className="tm-setrow">
+      <div className="tm-setrow__text">
+        <b>{rotulo}</b>
+        <span>{nota}</span>
+      </div>
+      <div className="tm-setrow__control">
+        <b className={`num tm-leitura${alerta ? ' is-warn' : ''}`}>{valor}</b>
+      </div>
     </div>
   )
 }

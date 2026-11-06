@@ -109,6 +109,18 @@ interface Chain {
 let chain: Chain | null = null
 let workletReady: Promise<boolean> | null = null
 let echoReady: Promise<boolean> | null = null
+let echoAtenuacao = 0
+
+/**
+ * Quanto o supressor de eco tirou, em dB, desde que ligou.
+ *
+ * Existe para a tela de áudio poder MOSTRAR que algo acontece em vez de
+ * afirmar que está ligado. Um interruptor cujo efeito ninguém consegue ver
+ * é um interruptor em que ninguém confia.
+ */
+export function echoAttenuationDb(): number {
+  return echoAtenuacao
+}
 
 /** The wasm bytes, decoded once. */
 function echoBytes(): ArrayBuffer {
@@ -270,6 +282,12 @@ async function route(level: NoiseSuppression, echo: boolean): Promise<void> {
         numberOfOutputs: 1,
         outputChannelCount: [1]
       })
+      node.port.onmessage = (event: MessageEvent): void => {
+        const data = event.data as { tipo?: string; db?: number } | null
+        if (data?.tipo === 'atenuacao' && typeof data.db === 'number') {
+          echoAtenuacao = data.db
+        }
+      }
       node.port.postMessage(
         { tipo: 'wasm', bytes: echoBytes(), taxa: context.sampleRate },
         // Transferred, not copied: 287 KB crossing to the audio thread.
@@ -427,6 +445,7 @@ export function closeMic(): void {
   if (chain.monitoring) chain.analyser.disconnect(chain.context.destination)
   chain.echo?.disconnect()
   chain.echoReference?.disconnect()
+  echoAtenuacao = 0
   chain.source.disconnect()
   chain.gain.disconnect()
   chain.rnnoise?.disconnect()

@@ -242,6 +242,36 @@ const VOICE_MIDS = SLOTS.map((slot, index) => ({ slot, index }))
   .filter(({ slot }) => slot.name === 'mic')
   .map(({ index }) => String(index))
 
+/**
+ * Quanto o receptor segura a voz de alguem antes de tocar, em milissegundos.
+ *
+ * Nunca foi tocado: o WebRTC decidia sozinho, e a decisao dele e conservadora
+ * de um jeito que nao serve aqui. O NetEq mira o menor atraso que evita
+ * engasgo e sobe rapido quando a rede piora — mas numa conversa cada
+ * milissegundo de buffer e um milissegundo a mais para responder, e numa
+ * malha domestica a rede piora o tempo todo.
+ *
+ * 80 ms e o piso que a gente pede. Abaixo disso um unico pacote atrasado
+ * vira buraco que o NetEq preenche inventando audio, e e exatamente isso que
+ * as pessoas descrevem como voz travando ou robotizada — a telemetria de voz
+ * ja conta quanto disso acontece, em `voiceConcealed`.
+ *
+ * E um PISO, nao um teto: o NetEq continua livre para subir quando a rede
+ * exigir. O que isto impede e ele descer demais atras de latencia e pagar em
+ * buracos.
+ */
+const VOICE_JITTER_TARGET_MS = 80
+
+function tuneVoiceJitterBuffer(receiver: RTCRtpReceiver): void {
+  const target = receiver as RTCRtpReceiver & { jitterBufferTarget?: number | null }
+  if (!('jitterBufferTarget' in target)) return
+  try {
+    target.jitterBufferTarget = VOICE_JITTER_TARGET_MS
+  } catch (error) {
+    console.warn('[rtc] jitterBufferTarget recusado:', error)
+  }
+}
+
 const STATS_INTERVAL_MS = 1_000
 /**
  * How long a dip must persist before the user is told about it.
@@ -361,7 +391,9 @@ export class PeerLink {
     this.pc.addEventListener('track', (event) => {
       const index = Number(event.transceiver.mid)
       const slot = SLOTS[index]?.name
-      if (slot) options.onTrack(slot, event.track)
+      if (!slot) return
+      if (slot === 'mic') tuneVoiceJitterBuffer(event.receiver)
+      options.onTrack(slot, event.track)
     })
 
     this.pc.addEventListener('connectionstatechange', () => this.reportState())

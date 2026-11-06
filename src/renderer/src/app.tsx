@@ -491,6 +491,53 @@ export function App(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.microphoneId, settings.noiseSuppression])
 
+  /**
+   * Reabre o microfone quando o dispositivo some embaixo dele.
+   *
+   * Desplugar um USB, o celular largar o WO Mic, o driver reiniciar — a
+   * faixa morre e nada reabria nada. A pessoa segue com o botao aceso,
+   * falando para ninguem, e so descobre quando alguem avisa.
+   *
+   * O evento tambem dispara quando um dispositivo APARECE, entao a
+   * verificacao e se a faixa que temos ainda esta viva, nao se a lista
+   * mudou.
+   */
+  useEffect(() => {
+    if (!snapshot.local.mic) return
+    const onChange = (): void => {
+      const faixa = snapshot.local.mic?.getAudioTracks()[0]
+      if (faixa && faixa.readyState === 'live') return
+      console.warn('[media] microfone caiu, reabrindo')
+      void (async () => {
+        try {
+          const atual = getSettings()
+          await session.swapDevice(
+            'mic',
+            await openMic(
+              atual.microphoneId,
+              atual.noiseSuppression,
+              atual.micGain,
+              atual.echoCancel
+            )
+          )
+          setEchoReference(session.mixer.reference())
+        } catch (error) {
+          // Sem dispositivo nenhum nao ha o que reabrir. Melhor ficar como
+          // esta do que derrubar a chamada inteira.
+          console.warn('[media] nao consegui reabrir o microfone:', error)
+        }
+      })()
+    }
+    navigator.mediaDevices.addEventListener('devicechange', onChange)
+    // Uma faixa pode morrer sem que a lista de dispositivos mude.
+    const faixa = snapshot.local.mic.getAudioTracks()[0]
+    faixa?.addEventListener('ended', onChange)
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', onChange)
+      faixa?.removeEventListener('ended', onChange)
+    }
+  }, [snapshot.local.mic])
+
   // Echo suppression is a live rewiring, and the reference has to be
   // re-attached whenever the mixer's context is rebuilt under it.
   useEffect(() => {
@@ -1045,6 +1092,7 @@ export function App(): JSX.Element {
       {settingsOpen && (
         <SettingsModal
           takenShortcuts={takenShortcuts}
+          peers={snapshot.peers}
           version={snapshot.self ? appVersion : appVersion}
           onClose={() => setSettingsOpen(false)}
           onAdjustCamera={() => {

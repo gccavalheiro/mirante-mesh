@@ -42,6 +42,8 @@ class EchoProcessor extends AudioWorkletProcessor {
   private prontas: number[] = []
 
   private ligado = true
+  /** Quantos quanta desde o ultimo relato. A tela nao precisa de mais. */
+  private desdeRelato = 0
 
   constructor() {
     super()
@@ -114,6 +116,13 @@ class EchoProcessor extends AudioWorkletProcessor {
       this.pendRef.splice(0, this.bloco)
       this.wasm.processar()
       for (let i = 0; i < this.bloco; i++) this.prontas.push(this.saida[i])
+    }
+
+    // Meio segundo entre relatos. A thread de audio nao deve gastar o
+    // orcamento dela alimentando um medidor.
+    if (++this.desdeRelato >= 180) {
+      this.desdeRelato = 0
+      this.port.postMessage({ tipo: 'atenuacao', db: this.wasm.atenuacao_db() })
     }
 
     if (this.prontas.length < out.length) {

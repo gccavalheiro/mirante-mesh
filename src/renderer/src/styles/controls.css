@@ -1716,3 +1716,15 @@
   aspect-ratio: auto;
   height: 72px;
 }
+
+/* Leituras de instrumento no diagnóstico de áudio. Monoespaçado e tabular
+   porque são números que mudam sozinhos, e dígito que empurra os vizinhos
+   a cada atualização lê como erro. */
+.tm-leitura {
+  font-size: var(--text-h4);
+  color: var(--text-primary);
+}
+
+.tm-leitura.is-warn {
+  color: var(--signal-fair);
+}
