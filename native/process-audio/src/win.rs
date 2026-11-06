@@ -21,6 +21,9 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
     TH32CS_SNAPPROCESS,
 };
+use windows::Win32::Storage::FileSystem::{
+    GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
+};
 use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
 use windows::Win32::Media::Audio::{
     eConsole, eRender, ActivateAudioInterfaceAsync, AudioSessionStateActive,
@@ -340,11 +343,41 @@ pub fn foreground_executable(own_pid: u32) -> Option<String> {
     if pid == own_pid {
         return None;
     }
-    executable_for_pid(pid)
+    // Caminho completo, nao so o nome: quem chama quer tambem pedir o
+    // icone ao sistema, e para isso precisa do arquivo.
+    executable_path(pid)
 }
 
 pub fn executable_for_pid(pid: u32) -> Option<String> {
     executable_name(pid)
+}
+
+/// Caminho completo do executavel de um processo.
+///
+/// `executable_name` ja consultava isto e descartava tudo menos o ultimo
+/// pedaco. O caminho inteiro e o que permite pedir o ICONE do programa ao
+/// sistema, e um icone ao lado de "Goals" e a diferenca entre uma linha de
+/// texto e reconhecer o jogo de relance.
+fn executable_path(pid: u32) -> Option<String> {
+    // SAFETY: handle fechado em todo caminho; comprimento passado por
+    // ponteiro e limitado pela API.
+    unsafe {
+        let handle: HANDLE = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut buffer = [0u16; MAX_PATH as usize];
+        let mut len = buffer.len() as u32;
+        let ok = QueryFullProcessImageNameW(
+            handle,
+            PROCESS_NAME_FORMAT(0),
+            windows::core::PWSTR(buffer.as_mut_ptr()),
+            &mut len,
+        )
+        .is_ok();
+        let _ = CloseHandle(handle);
+        if !ok {
+            return None;
+        }
+        Some(String::from_utf16_lossy(&buffer[..len as usize]))
+    }
 }
 
 fn executable_name(pid: u32) -> Option<String> {
@@ -632,4 +665,90 @@ where
         let _ = CloseHandle(sample_ready);
         Ok(())
     }
+}
+
+/// O nome que o programa da a si mesmo.
+///
+/// O nome do arquivo e o que o DISCO chama o programa, nao o que a pessoa
+/// chama: `WindowsTerminal.exe`, `Code.exe`, `msedge.exe`. Nenhum desses e
+/// o que alguem quer ler ao lado do rosto de um amigo.
+///
+/// Todo executavel assinado da Microsoft em diante carrega um recurso de
+/// versao com o campo `FileDescription`, que e exatamente o nome amigavel
+/// — "Windows Terminal", "Visual Studio Code", "Microsoft Edge". E o mesmo
+/// campo que a aba Detalhes do Explorer mostra.
+///
+/// Devolve None quando o executavel nao tem recurso de versao: muitos
+/// jogos e utilitarios pequenos nao tem, e nesse caso o nome do arquivo
+/// ainda e a melhor coisa disponivel.
+pub fn file_description(caminho: &str) -> Option<String> {
+    let arquivo: Vec<u16> = caminho.encode_utf16().chain(std::iter::once(0)).collect();
+
+    // SAFETY: o bloco e dimensionado pela propria API antes de ser lido, e
+    // os ponteiros que VerQueryValueW devolve apontam para DENTRO dele —
+    // so sao validos enquanto `bloco` viver, e ambos morrem aqui.
+    unsafe {
+        let tamanho = GetFileVersionInfoSizeW(PCWSTR(arquivo.as_ptr()), None);
+        if tamanho == 0 {
+            return None;
+        }
+        let mut bloco = vec![0u8; tamanho as usize];
+        GetFileVersionInfoW(
+            PCWSTR(arquivo.as_ptr()),
+            0,
+            tamanho,
+            bloco.as_mut_ptr() as *mut c_void,
+        )
+        .ok()?;
+
+        // Em que idioma o arquivo escreveu os proprios textos. Isto nao da
+        // para adivinhar: a chave do campo inclui idioma e codepage, e um
+        // executavel japones nao guarda nada sob a chave inglesa.
+        let traducao = utf16(r"\VarFileInfo\Translation");
+        let mut idioma: *mut c_void = std::ptr::null_mut();
+        let mut bytes = 0u32;
+        let achou = VerQueryValueW(
+            bloco.as_ptr() as *const c_void,
+            PCWSTR(traducao.as_ptr()),
+            &mut idioma,
+            &mut bytes,
+        )
+        .as_bool();
+        if !achou || bytes < 4 || idioma.is_null() {
+            return None;
+        }
+        let lingua = *(idioma as *const u16);
+        let pagina = *(idioma as *const u16).add(1);
+
+        let chave = utf16(&format!(
+            r"\StringFileInfo\{lingua:04x}{pagina:04x}\FileDescription"
+        ));
+        let mut texto: *mut c_void = std::ptr::null_mut();
+        let mut chars = 0u32;
+        let achou = VerQueryValueW(
+            bloco.as_ptr() as *const c_void,
+            PCWSTR(chave.as_ptr()),
+            &mut texto,
+            &mut chars,
+        )
+        .as_bool();
+        if !achou || chars == 0 || texto.is_null() {
+            return None;
+        }
+
+        let bruto = std::slice::from_raw_parts(texto as *const u16, chars as usize);
+        let nome = String::from_utf16_lossy(bruto)
+            .trim_end_matches(char::from(0))
+            .trim()
+            .to_owned();
+        if nome.is_empty() {
+            None
+        } else {
+            Some(nome)
+        }
+    }
+}
+
+fn utf16(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
 }

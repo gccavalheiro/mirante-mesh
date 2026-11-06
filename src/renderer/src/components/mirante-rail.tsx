@@ -5,7 +5,7 @@ import { micLevel } from '../rtc/mic-chain'
 import type { PeerView } from '../rtc/mesh-session'
 import { Avatar } from './avatar'
 import { IconMic, IconMicOff, IconScreen, IconVolume, IconVolumeOff } from './icons'
-import { formatVolume } from '../lib/format'
+import { formatVolume, gradeSignal } from '../lib/format'
 import { SignalMeter } from './signal-meter'
 import { VolumeSlider } from './volume-slider'
 
@@ -29,6 +29,9 @@ import { VolumeSlider } from './volume-slider'
 
 interface MiranteRailProps {
   peers: PeerView[]
+  /** O que VOCÊ está fazendo. A sessão anuncia isso e anunciar não mostra. */
+  selfActivity?: string
+  selfActivityIcon?: string
   selfName: string
   selfHue: number
   localCamera: MediaStream | null
@@ -52,6 +55,8 @@ interface MiranteRailProps {
 
 export function MiranteRail({
   peers,
+  selfActivity,
+  selfActivityIcon,
   selfName,
   selfHue,
   localCamera,
@@ -109,6 +114,8 @@ export function MiranteRail({
           active={focused === null}
           marca="você"
           marcaTipo="eu"
+          atividade={selfActivity}
+          atividadeIcone={selfActivityIcon}
           level={micOn ? micLevel : undefined}
           onFocus={() => onFocus(null)}
           acao={
@@ -239,6 +246,7 @@ function Linha({
   marca,
   marcaTipo = 'live',
   atividade,
+  atividadeIcone,
   meta,
   acao,
   mirrored = false,
@@ -256,7 +264,9 @@ function Linha({
   /** 'você' é identidade; 'ao vivo' é estado de transmissão. Cores diferentes. */
   marcaTipo?: 'eu' | 'live'
   atividade?: string
-  /** Segunda linha à direita: sinal e latência, no mesmo nível da atividade. */
+  /** Ícone do programa, 16px, vindo do próprio Windows. */
+  atividadeIcone?: string
+  /** Terceira linha: sinal e latência, só quando o caminho piora. */
   meta?: ReactNode
   acao: ReactNode
   mirrored?: boolean
@@ -351,12 +361,19 @@ function Linha({
             <em className={`tm-linha__marca label is-${marcaTipo}`}>{marca}</em>
           )}
         </span>
-        {(atividade || meta) && (
-          <span className="tm-linha__meta">
-            {atividade && <span className="tm-linha__ativ">{atividade}</span>}
-            {meta}
+        {/* Uma linha por assunto, empilhadas.
+            Lado a lado, atividade e medidor disputavam os mesmos 110px e o
+            nome do programa morria em "transmitin...". Linha custa altura;
+            truncar custa a informação. */}
+        {atividade && (
+          <span className="tm-linha__ativ">
+            {atividadeIcone && (
+              <img className="tm-linha__icone" src={atividadeIcone} alt="" aria-hidden="true" />
+            )}
+            <span className="tm-linha__ativtxt">{atividade}</span>
           </span>
         )}
+        {meta && <span className="tm-linha__meta">{meta}</span>}
       </span>
 
       {acao}
@@ -404,6 +421,7 @@ function LinhaPeer({
       active={active}
       level={live ? () => mixer.level(peer.info.id) : undefined}
       atividade={peer.state.screen ? 'transmitindo' : peer.state.activity}
+      atividadeIcone={peer.state.screen ? undefined : peer.state.activityIcon}
       marca={convidando ? 'ao vivo' : undefined}
       onFocus={onFocus}
       onAdjust={
@@ -412,7 +430,24 @@ function LinhaPeer({
           : undefined
       }
       adjusted={peer.audible ? peer.audio.volume : undefined}
-      meta={<SignalMeter stats={peer.stats} live={live} variant="inline" />}
+      /*
+       * O medidor só aparece quando tem o que dizer.
+       *
+       * Numa linha de 48px a segunda linha tem uns 110 pixels, e atividade
+       * mais barras mais latência não cabem em três: o texto morria em
+       * "transmitin...". A referência que o produto está perseguindo mostra
+       * nome e atividade, e nada mais.
+       *
+       * E latência boa não é informação — é ruído com aparência de dado. A
+       * da sala inteira já vive na barra de título. Aqui ele volta quando o
+       * caminho daquela pessoa piora, que é quando saber de quem é o
+       * problema passa a valer os pixels.
+       */
+      meta={
+        live && gradeSignal(peer.stats.rttMs, peer.stats.lossRatio, live) !== 'good' ? (
+          <SignalMeter stats={peer.stats} live={live} variant="inline" />
+        ) : undefined
+      }
       acao={
         <button
           type="button"

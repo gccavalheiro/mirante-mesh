@@ -74,7 +74,7 @@ export interface MiranteApi {
    */
   /** O programa em primeiro plano, para a sala mostrar o que voce faz. */
   activity: {
-    foreground: () => Promise<string | null>
+    foreground: () => Promise<{ name: string; icon: string | null } | null>
   }
   keys: {
     watch: () => Promise<boolean>
@@ -170,7 +170,11 @@ const api: MiranteApi = {
     on: (key, handler) => subscribe(`hotkey:${key}`, () => handler())
   },
   activity: {
-    foreground: () => ipcRenderer.invoke('activity:foreground') as Promise<string | null>
+    foreground: () =>
+      ipcRenderer.invoke('activity:foreground') as Promise<{
+        name: string
+        icon: string | null
+      } | null>
   },
   keys: {
     watch: () => ipcRenderer.invoke('keys:watch') as Promise<boolean>,

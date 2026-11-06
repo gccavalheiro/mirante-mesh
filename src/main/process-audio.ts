@@ -32,6 +32,7 @@ export interface AudioApp {
 interface NativeModule {
   /** Teclado global, com soltar. Ausente em addon antigo. */
   foregroundApp?: () => string | null
+  appDescription?: (path: string) => string | null
   startKeyWatch?: (onKey: (vk: number, down: boolean) => void) => void
   stopKeyWatch?: () => void
   isSupported: () => boolean
@@ -161,6 +162,17 @@ export interface AudioCapability {
  */
 export function foregroundApp(): string | null {
   return loadNative()?.foregroundApp?.() ?? null
+}
+
+/**
+ * O nome amigavel de um executavel.
+ *
+ * Lido do recurso de versao do arquivo — o mesmo campo que a aba Detalhes
+ * do Explorer mostra. Nulo quando o arquivo nao traz o campo, quando o
+ * addon e antigo, ou fora do Windows.
+ */
+export function appDescription(path: string): string | null {
+  return loadNative()?.appDescription?.(path) ?? null
 }
 
 export function startKeyWatch(onKey: (vk: number, down: boolean) => void): boolean {

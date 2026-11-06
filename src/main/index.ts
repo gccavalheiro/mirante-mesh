@@ -11,6 +11,7 @@ import {
 import { cancelPendingCapture, registerCapture } from './capture'
 import { log, startLogging } from './log'
 import {
+  appDescription,
   foregroundApp,
   registerProcessAudio,
   startKeyWatch,
@@ -147,6 +148,71 @@ function registerLobby(): void {
   })
 }
 
+interface Atividade {
+  name: string
+  icon: string | null
+}
+
+/**
+ * Que programa esta em primeiro plano, com o icone dele.
+ *
+ * O icone sai de `app.getFileIcon`, que pergunta ao proprio Windows — o
+ * mesmo desenho que aparece na barra de tarefas. Cacheado por caminho:
+ * extrair icone toca o disco, e o caminho so muda quando a pessoa troca
+ * de programa.
+ */
+function registerActivity(): void {
+  const cache = new Map<string, Atividade>()
+
+  /**
+   * Nome de arquivo sem extensao, para quando o executavel nao traz o
+   * campo de descricao. Muito jogo pequeno nao traz — e "Goals" ainda le
+   * melhor que "Goals.exe".
+   *
+   * O caminho completo e `C:\Users\<nome-de-usuario>\...`, e esta
+   * informacao e anunciada para a sala inteira: deixa-la entrar no
+   * renderer significa que um descuido la vira o nome de usuario do
+   * Windows de alguem aparecendo na tela dos amigos. O caminho e
+   * necessario aqui, para pedir icone e descricao ao sistema, e nao e
+   * necessario em lugar nenhum depois daqui.
+   */
+  const soONome = (caminho: string): string => {
+    const arquivo = (caminho.split(/[\\/]/).pop() ?? caminho)
+      .replace(/\.exe$/i, '')
+      .replace(/[-_]+/g, ' ')
+      .trim()
+    return arquivo.charAt(0).toUpperCase() + arquivo.slice(1)
+  }
+
+  ipcMain.handle('activity:foreground', async (): Promise<Atividade | null> => {
+    const caminho = foregroundApp()
+    if (!caminho) return null
+
+    const guardado = cache.get(caminho)
+    if (guardado) return guardado
+
+    // A descricao e o nome amigavel quase sempre, e as vezes uma frase:
+    // cmd.exe se descreve como "Processador de comandos do Windows". Uma
+    // linha dessas numa lista de pessoas empurra tudo; passado o limite,
+    // o nome do arquivo le melhor ("cmd").
+    const arquivo = soONome(caminho)
+    const descricao = appDescription(caminho)
+    const name = descricao && descricao.length <= 24 ? descricao : arquivo
+    let icon: string | null = null
+    try {
+      const img = await app.getFileIcon(caminho, { size: 'small' })
+      icon = img.isEmpty() ? null : img.toDataURL()
+    } catch {
+      // Programa protegido, caminho sem permissao, ou um executavel sem
+      // icone. O nome sozinho ainda vale.
+    }
+
+    const atividade: Atividade = { name, icon }
+    cache.set(caminho, atividade)
+    return atividade
+  })
+}
+
 /**
  * Tecla de falar, com soltar.
  *
@@ -222,7 +288,7 @@ void app.whenReady().then(() => {
   registerCapture()
   registerProcessAudio(mainWindow)
   registerLobby()
-  ipcMain.handle('activity:foreground', (): string | null => foregroundApp())
+  registerActivity()
   registerPushToTalk(mainWindow)
   registerHotkeys()
   registerOverlay(mainWindow)

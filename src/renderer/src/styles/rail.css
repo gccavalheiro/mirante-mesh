@@ -730,18 +730,41 @@
    diferente do botão acima e fazia uma linha com medidor ficar
    visivelmente torta ao lado de uma sem. Metadado é metadado: mesmo
    lugar, mesmo corpo, alinhado em todas as linhas. */
-.tm-linha__meta {
+/*
+ * Uma linha por assunto, empilhadas.
+ *
+ * Lado a lado, atividade e medidor disputavam os mesmos 110 pixels e o
+ * nome do programa morria em "transmitin...". Uma linha a mais custa
+ * altura; truncar custa a informação — e a informação é o ponto.
+ */
+.tm-linha__ativ {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
+  gap: 5px;
   min-width: 0;
 }
 
-.tm-linha__meta .tm-signal {
+/* O ícone vem do próprio Windows, o mesmo da barra de tarefas.
+   Reconhecer um jogo pelo ícone é instantâneo; ler o nome não é. */
+.tm-linha__icone {
   flex: none;
+  width: 12px;
+  height: 12px;
+  object-fit: contain;
+  /* Um pouco apagado para não brilhar mais que o nome logo acima. */
+  opacity: 0.85;
 }
 
-.tm-linha__ativ {
+.tm-linha__ativtxt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tm-linha__meta {
+  display: flex;
+  align-items: center;
   min-width: 0;
 }
 
@@ -879,16 +902,19 @@
   opacity: 1;
 }
 
+/* O volume sobe para o canto de cima.
+   Embaixo ele caía sobre a segunda linha, disputando os mesmos pixels do
+   medidor e da latência — três coisas no mesmo canto, nenhuma legível. */
 .tm-linha.is-card .tm-linha__vol {
-  right: 40px;
-  bottom: 8px;
-  top: auto;
+  right: var(--s-2);
+  top: var(--s-2);
+  bottom: auto;
   transform: none;
+  background: hsl(258 45% 2% / 0.72);
 }
 
-/* Na lista o medidor é metadado, não instrumento principal: menor que na
-   faixa sobre o vídeo, e sem a largura reservada de sete caracteres que
-   empurrava o nome para longe. */
+/* Quando aparece, o medidor é um aviso, não decoração. Âmbar, porque só
+   existe quando o caminho daquela pessoa deixou de estar bom. */
 .tm-linha__meta .tm-signal--inline .tm-signal__bars {
   height: 10px;
 }
@@ -899,5 +925,5 @@
 
 .tm-linha__meta .tm-signal__read {
   min-width: 0;
-  color: var(--text-muted);
+  color: var(--signal-fair);
 }

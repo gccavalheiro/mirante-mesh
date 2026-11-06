@@ -1157,7 +1157,8 @@ export class MeshSession {
       screenLabel: this.local.screenLabel ?? undefined,
       screenStreamId: this.local.screen?.id,
       cameraStreamId: this.local.camera?.id,
-      activity: this.activity ?? undefined
+      activity: this.activity ?? undefined,
+      activityIcon: this.activityIcon ?? undefined
     }
     this.signaling?.send({ t: 'publishState', state })
   }
@@ -1170,10 +1171,12 @@ export class MeshSession {
    * para dizer a mesma coisa.
    */
   private activity: string | null = null
+  private activityIcon: string | null = null
 
-  setActivity(app: string | null): void {
+  setActivity(app: string | null, icon: string | null): void {
     if (app === this.activity) return
     this.activity = app
+    this.activityIcon = icon
     this.announce()
   }
 

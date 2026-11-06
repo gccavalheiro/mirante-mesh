@@ -92,13 +92,6 @@ function isLeftoverServer(server: string): boolean {
  * gerenciador de tarefas. Nao tento adivinhar nomes comerciais: traduzir
  * "javaw.exe" para "Minecraft" acerta um caso e erra todos os outros.
  */
-function prettyApp(executable: string | null): string | null {
-  if (!executable) return null
-  const base = executable.replace(/\.exe$/i, '').replace(/[-_]+/g, ' ').trim()
-  if (base.length === 0) return null
-  return base.charAt(0).toUpperCase() + base.slice(1)
-}
-
 function loadDefaults(): JoinDetails {
   const fallback: JoinDetails = { name: '', room: '', server: '' }
   try {
@@ -600,26 +593,66 @@ export function App(): JSX.Element {
   }, [settings.pushToTalk, settings.pushToTalkKey, snapshot.local.mic])
 
   /**
-   * Conta a sala o que voce esta fazendo.
+   * Conta a sala o que você está fazendo.
    *
-   * De tres em tres segundos: rapido o bastante para "entrou no jogo"
-   * aparecer enquanto ainda interessa, devagar o bastante para ser uma
-   * chamada de sistema barata que ninguem percebe. A sessao so reanuncia
-   * quando o valor muda.
+   * ## Por que não é simplesmente "a janela em foco"
    *
-   * Nulo quando o Mirante esta em foco, porque "esta usando o Mirante" nao
-   * e atividade — quem esta na sala ja sabe disso.
+   * Porque alt-tab existe. Ler o foco a cada três segundos e anunciar
+   * faria a linha piscar entre o jogo e o navegador toda vez que alguém
+   * fosse ver uma mensagem — e uma informação que pisca é pior que
+   * nenhuma, porque ela chama atenção para dizer nada.
+   *
+   * O Discord resolve com uma lista de jogos conhecidos: ele vê o
+   * PROCESSO rodando, não o foco, e por isso continua dizendo "jogando" se
+   * você alterna. Sem essa lista, o equivalente honesto é exigir
+   * ESTABILIDADE: um programa só vira a sua atividade depois de segurar o
+   * foco por quinze segundos, e só deixa de ser depois de outro segurar o
+   * mesmo tanto.
+   *
+   * O resultado é que ir ver uma mensagem não muda nada, e trocar de jogo
+   * de verdade muda.
    */
+  const candidato = useRef<{ nome: string; vezes: number }>({ nome: '', vezes: 0 })
+  /**
+   * A sua própria atividade, para a sua própria linha.
+   *
+   * A sessão guarda isto para ANUNCIAR, e anunciar não mostra nada a quem
+   * anuncia. Ver o seu ali é a mesma confirmação que o anel de voz dá: que
+   * a coisa funciona, antes de alguém precisar avisar que não.
+   */
+  const [minhaAtividade, setMinhaAtividade] = useState<{
+    nome: string | null
+    icone: string | null
+  }>({ nome: null, icone: null })
   useEffect(() => {
     if (!joined) return
     let parado = false
+    // Cinco leituras de três segundos. Menos que isto e um alt-tab longo
+    // já conta; muito mais e trocar de jogo demora a aparecer.
+    const FIRMEZA = 5
+
     const ler = async (): Promise<void> => {
       try {
-        const app = await window.mirante.activity.foreground()
-        if (!parado) session.setActivity(prettyApp(app))
+        const atual = await window.mirante.activity.foreground()
+        if (parado) return
+        // O nome amigavel, nao o caminho: o processo principal nunca
+        // manda o caminho para ca, porque ele carrega o nome de usuario
+        // do Windows e isto vai para a sala inteira.
+        const nome = atual?.name ?? ''
+
+        if (nome !== candidato.current.nome) {
+          candidato.current = { nome, vezes: 1 }
+          return
+        }
+        candidato.current.vezes += 1
+        if (candidato.current.vezes !== FIRMEZA) return
+
+        const anuncio = nome || null
+        session.setActivity(anuncio, atual?.icon ?? null)
+        setMinhaAtividade({ nome: anuncio, icone: atual?.icon ?? null })
       } catch {
-        // Addon ausente ou plataforma sem suporte. Atividade e enfeite;
-        // falhar nela nao pode custar nada ao resto.
+        // Addon ausente ou plataforma sem suporte. Atividade é enfeite;
+        // falhar nela não pode custar nada ao resto.
       }
     }
     void ler()
@@ -627,7 +660,9 @@ export function App(): JSX.Element {
     return () => {
       parado = true
       window.clearInterval(id)
-      session.setActivity(null)
+      candidato.current = { nome: '', vezes: 0 }
+      session.setActivity(null, null)
+      setMinhaAtividade({ nome: null, icone: null })
     }
   }, [joined])
 
@@ -985,6 +1020,8 @@ export function App(): JSX.Element {
 
   const rail = (
     <MiranteRail
+      selfActivity={minhaAtividade.nome ?? undefined}
+      selfActivityIcon={minhaAtividade.icone ?? undefined}
       peers={snapshot.peers}
       selfName={snapshot.self?.name ?? joined.name}
       selfHue={snapshot.self?.hue ?? 263}

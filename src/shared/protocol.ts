@@ -104,6 +104,14 @@ export interface PeerPublishState {
    * atividade — e quando a pessoa desligou isso.
    */
   activity?: string
+  /**
+   * Icone do programa, como data URL de 16px.
+   *
+   * Vai junto porque reconhecer um jogo pelo icone e instantaneo e ler o
+   * nome nao e. Sao uns 2 KB, e so viaja quando a atividade MUDA — e ela
+   * so muda quando a pessoa fica de verdade em outro programa.
+   */
+  activityIcon?: string
   /** Set when the peer is sharing a screen: lets viewers label the stage. */
   screenLabel?: string
   /**

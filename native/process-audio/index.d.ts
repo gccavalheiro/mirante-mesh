@@ -59,6 +59,16 @@ export declare function stopKeyWatch(): void
  * "esta usando o Mirante" nao e atividade.
  */
 export declare function foregroundApp(): string | null
+/**
+ * O nome amigavel de um executavel, lido do recurso de versao dele.
+ *
+ * Existe porque "WindowsTerminal.exe" ao lado do rosto de alguem nao
+ * comunica nada: o que o Windows mostra em toda parte e "Windows
+ * Terminal", e e isso que a sala tem de ler. Devolve nulo quando o
+ * arquivo nao traz o campo, e nesse caso quem chama fica com o nome do
+ * arquivo, que ainda e melhor que nada.
+ */
+export declare function appDescription(path: string): string | null
 export declare function isSupported(): boolean
 /**
  * Enumerate processes that currently own an audio session.
