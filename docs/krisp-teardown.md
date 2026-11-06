@@ -190,6 +190,45 @@ variantes personalizadas de DeepFilterNet — mas é a parte de pesquisa, não a
 de integração. Prometer paridade com um modelo de 15 MB treinado com os dados
 do Krisp seria desonesto.
 
+## Medido na montagem real
+
+Três gravações do WO Mic, 48 kHz, na montagem exata do relato: celular como
+microfone, amigos saindo na Edifier através do FxSound.
+
+```
+                              piso      fala (mediana)   fala (pico)
+nada tocando, calado        -49,3 dBFS        —               —
+amigos na Edifier, calado   -46,4 dBFS     -26,4 dBFS      -11,5 dBFS
+amigos + voce falando       -48,9 dBFS     -21,2 dBFS       -8,4 dBFS
+```
+
+Quadros classificados como fala por concentração de energia entre 200 e
+3400 Hz acima de 55%.
+
+**A sua voz está 5,2 dB acima do eco na mediana, e 3,1 dB no pico.**
+
+Isso elimina uma familia inteira de solucoes. Qualquer supressao por NIVEL —
+portao, expansor, limiar adaptativo — precisa de uma separacao que aqui nao
+existe. Com 5 dB, o limiar que cala os amigos cala voce junto.
+
+O eco esta 22,9 dB acima do piso do quarto, entao nao e sutil: a Edifier
+chega ao celular com forca de fala normal. O ganho automatico do WO Mic
+provavelmente ajuda a piorar, comprimindo a diferenca que havia.
+
+### O que sobrevive a essa medicao
+
+**Supressao guiada por referencia** — porque ela nao e baseada em nivel. Com o
+loopback sabemos *o que* foi tocado; nao estamos adivinhando o que e eco, e 5
+dB de separacao deixa de importar. Exige rastrear o atraso, que continua sendo
+a peca central.
+
+**BVC / modelo** — unica saida quando a referencia nao existe, por exemplo se a
+voz dos amigos sai pelo Discord e nao pelo Mirante.
+
+E uma consequencia que precisa ser dita ao usuario: a supressao guiada por
+referencia so funciona para o audio que o MIRANTE tocou. Amigos no Discord
+saindo na mesma caixa continuam sem solucao por esse caminho.
+
 ## Restrição de plataforma, descoberta ao escolher as peças
 
 O Mirante compila para `x86_64-pc-windows-msvc`. Isso elimina a opção óbvia.
