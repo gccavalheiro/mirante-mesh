@@ -525,3 +525,379 @@
   color: hsl(258 20% 92%);
   background: hsl(258 40% 2% / 0.85);
 }
+
+/* ---------------------------------------------------------------------- */
+/* A lista — uma pessoa por linha, na coluna da direita                     */
+/* ---------------------------------------------------------------------- */
+/*
+ * Quarenta e oito pixels por pessoa, contra os cento e setenta que um tile
+ * 16:9 gastava. Numa coluna de 265px cabiam duas pessoas; agora cabem oito,
+ * e sem câmera ninguém vira uma caixa preta com uma letra no meio.
+ *
+ * Sem borda entre as linhas. A separação é espaço — é o que faz uma lista
+ * ler como lista e não como tabela.
+ */
+.tm-linha {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
+  min-height: 48px;
+  min-width: 0;
+}
+
+.tm-linha.is-adjustable {
+  cursor: ns-resize;
+}
+
+.tm-linha:hover {
+  background: var(--surface-1);
+}
+
+/* A pessoa em foco, marcada na borda e não com fundo: fundo brigaria com
+   o realce de hover, e os dois significam coisas diferentes. */
+.tm-linha.is-active {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* Dois elementos, e a separação é o conserto: `__face` posiciona e NÃO
+   recorta, `__rosto` recorta a imagem. O anel precisa desenhar por fora
+   da borda, e com os dois papéis no mesmo elemento o `overflow: hidden`
+   comia o anel inteiro — ninguém via quem estava falando. */
+.tm-linha__face {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+
+/* O rosto é redondo porque é um rosto — a única coisa no app, junto das
+   lâmpadas, que tem direito a raio. */
+.tm-linha__rosto {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-full);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.tm-linha__rosto .tm-avatar {
+  width: 100%;
+  height: 100%;
+  font-size: var(--text-micro);
+}
+
+/* Com câmera, ela É o avatar: ao vivo, redonda, no mesmo lugar. */
+.tm-linha__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tm-linha__video.is-mirrored {
+  transform: scaleX(-1);
+}
+
+/* O anel de voz fica no ROSTO, não ao lado do nome: o estado pertence à
+   pessoa, não à linha. É a mesma decisão que põe o ponto de status sobre
+   a foto no Discord.
+ *
+ * Desenhado com sombra em vez de borda: borda em inset negativo depende do
+ * elemento não recortar, e sombra não depende de nada. O halo externo é o
+ * que faz isto ser visto de relance numa lista — o anel sozinho some
+ * contra um avatar escuro. */
+.tm-linha__anel {
+  position: absolute;
+  inset: -3px;
+  border-radius: var(--r-full);
+  box-shadow:
+    0 0 0 2px var(--signal-good),
+    0 0 10px hsl(168 68% 58% / 0.45);
+  opacity: 0;
+  transition: opacity 90ms linear;
+  pointer-events: none;
+}
+
+.tm-linha__texto {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tm-linha__nome {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "você" é identidade, "ao vivo" é estado. Vermelho no app inteiro
+   significa NO AR, e usá-lo para marcar quem é você diz a coisa errada
+   em toda linha. */
+.tm-linha__marca {
+  flex: none;
+  font-size: var(--text-nano);
+}
+
+.tm-linha__marca.is-eu {
+  color: var(--text-muted);
+}
+
+.tm-linha__marca.is-live {
+  color: var(--tally);
+}
+
+/* Menor e mais apagada. Descreve a linha de cima e não pode competir
+   com ela. */
+.tm-linha__ativ {
+  font-size: var(--text-nano);
+  color: var(--text-muted);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tm-linha__btn {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.tm-linha__btn:hover:not(:disabled) {
+  border-color: var(--rule);
+  color: var(--text-primary);
+}
+
+.tm-linha__btn.is-off {
+  color: var(--tally);
+}
+
+.tm-linha__btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Camada de clique sob os controles, nunca sobre eles. */
+.tm-linha__hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+/* O volume só aparece enquanto a roda mexe nele. */
+.tm-linha__vol {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  padding: 1px 5px;
+  font-size: var(--text-nano);
+  color: var(--text-secondary);
+  background: var(--surface-0, var(--surface-base));
+  opacity: 0;
+  transition: opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  pointer-events: none;
+}
+
+.tm-linha.is-adjustable:hover .tm-linha__vol {
+  opacity: 1;
+}
+
+/* Sinal e latência moram na SEGUNDA LINHA, junto da atividade.
+   Estavam em posição absoluta no canto, o que os punha num nível
+   diferente do botão acima e fazia uma linha com medidor ficar
+   visivelmente torta ao lado de uma sem. Metadado é metadado: mesmo
+   lugar, mesmo corpo, alinhado em todas as linhas. */
+.tm-linha__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.tm-linha__meta .tm-signal {
+  flex: none;
+}
+
+.tm-linha__ativ {
+  min-width: 0;
+}
+
+/* O cabeçalho vira censo: rótulo, fio, e a contagem em monoespaçado. */
+.tm-rail--right .tm-rail__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3) var(--s-3);
+}
+
+.tm-rail__rule {
+  flex: 1;
+  height: 1px;
+  background: var(--rule-faint);
+}
+
+/* ---- com câmera, a linha vira cartão --------------------------------- */
+/*
+ * Num círculo de 32px dá para identificar alguém, não para ver alguém — e
+ * ver a cara do amigo enquanto se assiste algo é metade do motivo da
+ * câmera existir aqui. Então o vídeo recebe espaço de verdade, e só ele.
+ */
+.tm-linha.is-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  margin-bottom: var(--s-2);
+  border: 1px solid var(--rule-faint);
+}
+
+.tm-linha.is-card:hover {
+  background: transparent;
+  border-color: var(--rule);
+}
+
+.tm-linha__quadro {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--surface-stage);
+  overflow: hidden;
+}
+
+.tm-linha.is-card .tm-linha__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Falando, com a câmera ligada: o anel vira a borda do próprio quadro.
+   Mesmo significado, na forma que a imagem tem. */
+.tm-linha__borda {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--signal-good);
+  opacity: 0;
+  transition: opacity 90ms linear;
+  pointer-events: none;
+}
+
+/*
+ * Com câmera ligada, a imagem é o conteúdo e todo o resto é etiqueta.
+ *
+ * Nome, medidor, latência e botão ficam INVISÍVEIS em repouso e aparecem
+ * ao passar o mouse. O rosto já diz quem é — é para isso que a câmera
+ * está ligada — e um nome escrito permanentemente por cima dele compete
+ * com a única coisa que a pessoa quis mostrar.
+ *
+ * O escurecimento NÃO some junto: ele cai a 30% e fica. Sumir de todo
+ * deixaria o texto, ao voltar, aparecendo sobre pixels claros e
+ * ilegíveis — e a sombra constante também assenta a imagem dentro do
+ * cartão em vez de ela flutuar.
+ *
+ * Por isso são duas camadas. Eram uma só, com o degradê pintado no mesmo
+ * elemento do texto, e aí baixar um baixava o outro.
+ */
+.tm-linha.is-card .tm-linha__quadro::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56%;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    hsl(258 45% 2% / 0.92) 0%,
+    hsl(258 45% 2% / 0.72) 35%,
+    hsl(258 45% 2% / 0.28) 70%,
+    transparent 100%
+  );
+  opacity: 0.3;
+  transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tm-linha.is-card:hover .tm-linha__quadro::after,
+.tm-linha.is-card:focus-within .tm-linha__quadro::after {
+  opacity: 1;
+}
+
+.tm-linha.is-card .tm-linha__texto {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  padding: var(--s-3) 40px var(--s-2) var(--s-3);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tm-linha.is-card:hover .tm-linha__texto,
+.tm-linha.is-card:focus-within .tm-linha__texto {
+  opacity: 1;
+}
+
+.tm-linha.is-card .tm-linha__btn {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  z-index: 3;
+  opacity: 0;
+  transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* O botão volta junto com o resto. Um controle invisível que continua
+   clicável é uma armadilha; aqui ele só existe enquanto se vê. */
+.tm-linha.is-card:hover .tm-linha__btn,
+.tm-linha.is-card:focus-within .tm-linha__btn {
+  opacity: 1;
+}
+
+.tm-linha.is-card .tm-linha__vol {
+  right: 40px;
+  bottom: 8px;
+  top: auto;
+  transform: none;
+}
+
+/* Na lista o medidor é metadado, não instrumento principal: menor que na
+   faixa sobre o vídeo, e sem a largura reservada de sete caracteres que
+   empurrava o nome para longe. */
+.tm-linha__meta .tm-signal--inline .tm-signal__bars {
+  height: 10px;
+}
+
+.tm-linha__meta .tm-signal--inline .tm-signal__seg {
+  width: 2px;
+}
+
+.tm-linha__meta .tm-signal__read {
+  min-width: 0;
+  color: var(--text-muted);
+}

@@ -85,12 +85,47 @@ export function MiranteRail({
   const rank = (sharing: boolean, camera: boolean): number =>
     sharing ? 0 : camera ? 1 : 2
 
+  // Coluna à direita vira LISTA; faixa sobre o vídeo continua em tiles.
+  //
+  // São dois contextos e não duas aparências do mesmo. Sobre o vídeo, o
+  // espaço é horizontal e escasso, e um tile 16:9 lado a lado é o formato
+  // certo. Numa coluna de 265px, o mesmo tile gasta 170px de altura por
+  // pessoa — e sem câmera isso é uma caixa preta com uma letra no meio.
+  // Oito pessoas não cabem; numa linha de 48px, cabem.
+  const lista = position === 'right'
+
   const rows = [
     {
       key: 'self',
       rank: rank(selfSharing, localCamera !== null),
       at: 0,
-      node: (
+      node: lista ? (
+        <Linha
+          key="self"
+          name={selfName}
+          hue={selfHue}
+          stream={localCamera}
+          mirrored={mirrorSelf}
+          active={focused === null}
+          marca="você"
+          marcaTipo="eu"
+          level={micOn ? micLevel : undefined}
+          onFocus={() => onFocus(null)}
+          acao={
+            <button
+              type="button"
+              className={`tm-linha__btn${micOn ? '' : ' is-off'}`}
+              onClick={(event) => {
+                event.stopPropagation()
+                onToggleMic()
+              }}
+              title={micOn ? 'Desligar seu microfone' : 'Ligar seu microfone'}
+            >
+              {micOn ? <IconMic size={14} /> : <IconMicOff size={14} />}
+            </button>
+          }
+        />
+      ) : (
         <Tile
           key="self"
           name={selfName}
@@ -125,7 +160,17 @@ export function MiranteRail({
       key: peer.info.id,
       rank: rank(peer.state.screen, peer.state.camera),
       at: peer.info.joinedAt,
-      node: (
+      node: lista ? (
+        <LinhaPeer
+          key={peer.info.id}
+          peer={peer}
+          mixer={mixer}
+          active={focused === peer.info.id}
+          onFocus={() => onFocus(peer.info.id)}
+          onVolume={(volume) => onVolume(peer.info.id, volume)}
+          onToggleMute={() => onToggleMute(peer.info.id)}
+        />
+      ) : (
         <PeerTile
           key={peer.info.id}
           peer={peer}
@@ -153,12 +198,236 @@ export function MiranteRail({
       {position === 'right' && (
         <div className="tm-rail__head">
           <span className="label">Na sala</span>
-          <span className="tm-rail__count num">{peers.length + 1}</span>
+          <span className="tm-rail__rule" />
+          <span className="tm-rail__count num">
+            {String(peers.length + 1).padStart(2, '0')}
+          </span>
         </div>
       )}
       {rows}
 
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// A lista — uma pessoa por linha
+// ---------------------------------------------------------------------------
+
+/**
+ * Uma pessoa, em 48 pixels — ou em um cartão, quando há câmera.
+ *
+ * Sem câmera, a pessoa é uma linha: rosto redondo de 32px, nome, e o que
+ * ela está fazendo embaixo em corpo menor. Oito cabem onde antes cabiam
+ * duas, e ninguém vira uma caixa preta com uma letra no meio.
+ *
+ * COM câmera, a linha cresce e vira um cartão 16:9 com o nome por cima da
+ * imagem. Num círculo de 32px dá para identificar alguém e não para VER
+ * alguém, e ver a cara do amigo enquanto se assiste algo é metade do
+ * motivo da câmera existir neste app. Denso onde é de graça, grande onde
+ * precisa.
+ *
+ * O anel de voz fica no ROSTO nos dois casos, não ao lado do nome: o
+ * estado pertence à pessoa, não à linha.
+ */
+function Linha({
+  name,
+  hue,
+  stream,
+  active,
+  level,
+  marca,
+  marcaTipo = 'live',
+  atividade,
+  meta,
+  acao,
+  mirrored = false,
+  onFocus,
+  onAdjust,
+  adjusted,
+  children
+}: {
+  name: string
+  hue: number
+  stream: MediaStream | null
+  active: boolean
+  level?: () => number
+  marca?: string
+  /** 'você' é identidade; 'ao vivo' é estado de transmissão. Cores diferentes. */
+  marcaTipo?: 'eu' | 'live'
+  atividade?: string
+  /** Segunda linha à direita: sinal e latência, no mesmo nível da atividade. */
+  meta?: ReactNode
+  acao: ReactNode
+  mirrored?: boolean
+  onFocus: () => void
+  onAdjust?: (delta: number) => void
+  adjusted?: number
+  children?: ReactNode
+}): JSX.Element {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const anelRef = useRef<HTMLSpanElement>(null)
+  const linhaRef = useRef<HTMLDivElement>(null)
+  const levelRef = useRef(level)
+  levelRef.current = level
+  const adjustRef = useRef(onAdjust)
+  adjustRef.current = onAdjust
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (video.srcObject !== stream) {
+      video.srcObject = stream
+      if (stream) void video.play().catch(() => undefined)
+    }
+  }, [stream])
+
+  const medido = level !== undefined
+  useEffect(() => {
+    if (!medido) return
+    let frame = 0
+    const pintar = (): void => {
+      const node = anelRef.current
+      const ler = levelRef.current
+      if (node && ler) node.style.opacity = ler() > 0.04 ? '1' : '0'
+      frame = requestAnimationFrame(pintar)
+    }
+    frame = requestAnimationFrame(pintar)
+    return () => cancelAnimationFrame(frame)
+  }, [medido])
+
+  // Nativo, porque o React registra wheel como passivo e passivo não pode
+  // chamar preventDefault — o volume mexeria e a lista rolaria junto.
+  const ajustavel = onAdjust !== undefined
+  useEffect(() => {
+    const node = linhaRef.current
+    if (!node || !ajustavel) return
+    const naRoda = (event: WheelEvent): void => {
+      event.preventDefault()
+      adjustRef.current?.(event.deltaY < 0 ? 0.05 : -0.05)
+    }
+    node.addEventListener('wheel', naRoda, { passive: false })
+    return () => node.removeEventListener('wheel', naRoda)
+  }, [ajustavel])
+
+  const comVideo = stream !== null
+
+  return (
+    <div
+      ref={linhaRef}
+      role="listitem"
+      className={`tm-linha${comVideo ? ' is-card' : ''}${active ? ' is-active' : ''}${
+        ajustavel ? ' is-adjustable' : ''
+      }`}
+    >
+      {comVideo ? (
+        <span className="tm-linha__quadro">
+          <video
+            ref={videoRef}
+            className={`tm-linha__video${mirrored ? ' is-mirrored' : ''}`}
+            autoPlay
+            playsInline
+            muted
+          />
+          {medido && <span ref={anelRef} className="tm-linha__borda" aria-hidden="true" />}
+        </span>
+      ) : (
+        /* O anel vive FORA do elemento que recorta: ele desenha por fora
+           da borda, e `__rosto` precisa de `overflow: hidden` para
+           arredondar a imagem — o recorte comia o anel inteiro e ninguém
+           nunca via quem estava falando. */
+        <span className="tm-linha__face">
+          <span className="tm-linha__rosto">
+            <Avatar name={name} hue={hue} />
+          </span>
+          {medido && <span ref={anelRef} className="tm-linha__anel" aria-hidden="true" />}
+        </span>
+      )}
+
+      <span className="tm-linha__texto">
+        <span className="tm-linha__nome">
+          {name}
+          {marca && (
+            <em className={`tm-linha__marca label is-${marcaTipo}`}>{marca}</em>
+          )}
+        </span>
+        {(atividade || meta) && (
+          <span className="tm-linha__meta">
+            {atividade && <span className="tm-linha__ativ">{atividade}</span>}
+            {meta}
+          </span>
+        )}
+      </span>
+
+      {acao}
+
+      <button type="button" className="tm-linha__hit" onClick={onFocus}>
+        <span className="tm-sr">Ver {name}</span>
+      </button>
+
+      {adjusted !== undefined && (
+        <span className="tm-linha__vol num" aria-hidden="true">
+          {formatVolume(adjusted)}
+        </span>
+      )}
+      {children}
+    </div>
+  )
+}
+
+/** Uma pessoa da sala, como linha. */
+function LinhaPeer({
+  peer,
+  mixer,
+  active,
+  onFocus,
+  onVolume,
+  onToggleMute
+}: {
+  peer: PeerView
+  mixer: AudioMixer
+  active: boolean
+  onFocus: () => void
+  onVolume: (volume: number) => void
+  onToggleMute: () => void
+}): JSX.Element {
+  const live = peer.link === 'live'
+  // Transmitindo mas não estamos recebendo. É um convite, não uma imagem —
+  // e deliberadamente NÃO é o tally vermelho, que significa "você está no ar".
+  const convidando = !peer.watching && peer.state.screen
+
+  return (
+    <Linha
+      name={peer.info.name}
+      hue={peer.info.hue}
+      stream={peer.camera}
+      active={active}
+      level={live ? () => mixer.level(peer.info.id) : undefined}
+      atividade={peer.state.screen ? 'transmitindo' : peer.state.activity}
+      marca={convidando ? 'ao vivo' : undefined}
+      onFocus={onFocus}
+      onAdjust={
+        peer.audible
+          ? (delta) => onVolume(Math.min(2, Math.max(0, peer.audio.volume + delta)))
+          : undefined
+      }
+      adjusted={peer.audible ? peer.audio.volume : undefined}
+      meta={<SignalMeter stats={peer.stats} live={live} variant="inline" />}
+      acao={
+        <button
+          type="button"
+          className={`tm-linha__btn${peer.audio.muted ? ' is-off' : ''}`}
+          disabled={!peer.audible}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggleMute()
+          }}
+          title={peer.audio.muted ? `Ouvir ${peer.info.name}` : `Silenciar ${peer.info.name}`}
+        >
+          {peer.audio.muted ? <IconVolumeOff size={14} /> : <IconVolume size={14} />}
+        </button>
+      }
+    />
   )
 }
 
