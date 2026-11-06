@@ -42,6 +42,22 @@ export interface Settings {
    */
   echoCancel: boolean
   /**
+   * Falar só enquanto a tecla estiver apertada.
+   *
+   * O microfone fica fechado por padrão e abre no que você segura. Para
+   * quem joga com a família na sala, é a diferença entre poder usar o app
+   * e não poder.
+   */
+  pushToTalk: boolean
+  /**
+   * Código da tecla no Windows, não o caractere.
+   *
+   * O gancho nativo reporta o virtual-key code do sistema, que é o que
+   * sobrevive a layout de teclado: a mesma tecla física tem o mesmo número
+   * em ABNT e em US, e é a tecla física que a pessoa decorou.
+   */
+  pushToTalkKey: number
+  /**
    * Your own microphone level, 0..2.
    *
    * Everyone could already turn everyone else up or down and nobody could
@@ -124,6 +140,9 @@ export const DEFAULT_SETTINGS: Settings = {
   // silenciosa — ninguem tocando — o supressor tira 18 dB de um microfone
   // limpo, o que atingiria todo mundo que nao tem eco nenhum.
   echoCancel: false,
+  pushToTalk: false,
+  // V, como em quase todo app de voz.
+  pushToTalkKey: 86,
   micGain: 1,
   roomSounds: true,
   defaultProfile: 'smooth',

@@ -538,6 +538,52 @@ export function App(): JSX.Element {
     }
   }, [snapshot.local.mic])
 
+  /**
+   * Falar só enquanto a tecla está apertada.
+   *
+   * A faixa é desabilitada em vez de o microfone ser fechado: `enabled =
+   * false` faz o WebRTC mandar silêncio imediatamente, sem renegociar nada
+   * e sem o meio segundo que reabrir um dispositivo custa. Soltar e apertar
+   * de novo no meio de uma frase tem que ser instantâneo.
+   *
+   * O gancho nativo escuta o teclado inteiro, inclusive com o jogo em
+   * foco, e nunca engole a tecla.
+   */
+  useEffect(() => {
+    const faixa = snapshot.local.mic?.getAudioTracks()[0]
+    if (!faixa) return
+
+    if (!settings.pushToTalk) {
+      // Sair do modo deixa o microfone aberto, nunca mudo por acidente.
+      faixa.enabled = true
+      void window.mirante.keys.unwatch()
+      return
+    }
+
+    faixa.enabled = false
+    void window.mirante.keys.watch().then((ok) => {
+      if (ok) return
+      // Sem gancho não há como saber que a tecla foi apertada, e deixar a
+      // faixa desabilitada deixaria a pessoa MUDA sem nada na tela dizendo
+      // isso. Microfone aberto é o pior caso aceitável; mudo em silêncio
+      // não é.
+      console.warn('[ptt] gancho de teclado indisponível — microfone fica aberto')
+      const viva = snapshot.local.mic?.getAudioTracks()[0]
+      if (viva) viva.enabled = true
+    })
+    const off = window.mirante.keys.on((vk, down) => {
+      if (vk !== settings.pushToTalkKey) return
+      const viva = snapshot.local.mic?.getAudioTracks()[0]
+      if (viva) viva.enabled = down
+    })
+    return () => {
+      off()
+      const viva = snapshot.local.mic?.getAudioTracks()[0]
+      if (viva) viva.enabled = true
+      void window.mirante.keys.unwatch()
+    }
+  }, [settings.pushToTalk, settings.pushToTalkKey, snapshot.local.mic])
+
   // Echo suppression is a live rewiring, and the reference has to be
   // re-attached whenever the mixer's context is rebuilt under it.
   useEffect(() => {

@@ -291,6 +291,25 @@ export function SettingsModal({
                     cannot hear is asking them to guess. The question people
                     actually have is whether the room should be audible. */}
                 <Row
+                  label="Falar só segurando a tecla"
+                  hint="O microfone fica fechado e abre enquanto você segura. Funciona com o jogo em foco."
+                >
+                  <Toggle
+                    checked={settings.pushToTalk}
+                    onChange={(pushToTalk) => updateSettings({ pushToTalk })}
+                  />
+                </Row>
+
+                {settings.pushToTalk && (
+                  <Row label="Tecla" hint="Clique e aperte a tecla que você quer usar.">
+                    <TeclaDeFalar
+                      codigo={settings.pushToTalkKey}
+                      onCodigo={(pushToTalkKey) => updateSettings({ pushToTalkKey })}
+                    />
+                  </Row>
+                )}
+
+                <Row
                   label="Reduzir ruído do ambiente"
                   hint="Corta teclado, ventilador, TV e gente falando atrás, sem cortar você."
                 >
@@ -580,6 +599,87 @@ function Leitura({
       </b>
     </div>
   )
+}
+
+/**
+ * Captura uma tecla física para o push-to-talk.
+ *
+ * Guarda o código do Windows, não o caractere: é o que o gancho nativo
+ * reporta e é o que sobrevive a layout, porque a mesma tecla física tem o
+ * mesmo número em ABNT e em US — e é a tecla física que a pessoa decorou.
+ *
+ * `event.code` seria o certo pela especificação, mas o gancho fala em
+ * virtual-key do sistema, e `keyCode` é o que ainda carrega esse número no
+ * navegador. Depreciado, e sem substituto para esta ponte.
+ */
+function TeclaDeFalar({
+  codigo,
+  onCodigo
+}: {
+  codigo: number
+  onCodigo: (codigo: number) => void
+}): JSX.Element {
+  const [ouvindo, setOuvindo] = useState(false)
+
+  useEffect(() => {
+    if (!ouvindo) return
+    const pegar = (event: KeyboardEvent): void => {
+      event.preventDefault()
+      if (event.key === 'Escape') {
+        setOuvindo(false)
+        return
+      }
+      onCodigo(event.keyCode)
+      setOuvindo(false)
+    }
+    window.addEventListener('keydown', pegar, true)
+    return () => window.removeEventListener('keydown', pegar, true)
+  }, [ouvindo, onCodigo])
+
+  return (
+    <button
+      type="button"
+      className={`tm-tecla${ouvindo ? ' is-listening' : ''}`}
+      onClick={() => setOuvindo(true)}
+    >
+      {ouvindo ? 'aperte uma tecla' : nomeDaTecla(codigo)}
+    </button>
+  )
+}
+
+/**
+ * O nome que a pessoa reconhece, a partir do código do Windows.
+ *
+ * Só os casos que não se adivinham. Letras e números são o próprio
+ * caractere, que é o que a tabela de virtual-keys já faz coincidir com
+ * ASCII maiúsculo.
+ */
+function nomeDaTecla(codigo: number): string {
+  const nomes: Record<number, string> = {
+    9: 'Tab',
+    16: 'Shift',
+    17: 'Ctrl',
+    18: 'Alt',
+    20: 'Caps Lock',
+    32: 'Espaço',
+    45: 'Insert',
+    46: 'Delete',
+    91: 'Windows',
+    96: 'Num 0',
+    97: 'Num 1',
+    98: 'Num 2',
+    99: 'Num 3',
+    100: 'Num 4',
+    101: 'Num 5',
+    162: 'Ctrl esq.',
+    163: 'Ctrl dir.',
+    164: 'Alt esq.',
+    165: 'Alt dir.'
+  }
+  if (nomes[codigo]) return nomes[codigo]
+  if (codigo >= 112 && codigo <= 123) return `F${codigo - 111}`
+  if (codigo >= 48 && codigo <= 90) return String.fromCharCode(codigo)
+  return `tecla ${codigo}`
 }
 
 function Group({ title, children }: { title: string; children: ReactNode }): JSX.Element {

@@ -1767,3 +1767,29 @@
 .tm-diag__item.is-warn b {
   color: var(--signal-fair);
 }
+
+/* A tecla de falar. Monoespaçada porque é um nome de tecla, não prosa, e é
+   o mesmo registro em que o app escreve todo rótulo de equipamento. */
+.tm-tecla {
+  min-width: 10ch;
+  padding: var(--s-2) var(--s-3);
+  background: var(--surface-input);
+  border: 1px solid var(--rule);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tm-tecla:hover {
+  border-color: var(--rule-strong);
+}
+
+/* Enquanto espera, a borda é o próprio pedido. */
+.tm-tecla.is-listening {
+  border-color: var(--accent);
+  color: var(--accent-bright);
+}
