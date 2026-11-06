@@ -120,6 +120,14 @@ jobs:
       # (updater.ts), so a missing one is worth a warning and not worth
       # failing a release that otherwise works.
       - name: Make sure the release really has its files
+        # Roda mesmo quando a publicacao falha, e por isso que ela existe.
+        # Em v0.1.46 o electron-builder abriu um publisher por artefato,
+        # dois tentaram CRIAR o release, e o segundo levou
+        # "already_exists" e derrubou o passo. O instalador ja estava no
+        # ar; o latest.yml, que e o arquivo que as copias instaladas
+        # consultam, nao. Um reparo que so roda quando nada quebrou
+        # conserta exatamente os casos que nao precisavam de reparo.
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
