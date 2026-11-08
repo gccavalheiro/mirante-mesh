@@ -77,6 +77,18 @@ const UPLINK_TOTAL_MAX = 24_000_000
  * the person's choice; how much bandwidth it gets is ours.
  */
 const BUDGET_MAX_RELAYED = 3_000_000
+/**
+ * Quanto tempo uma live pode ficar sem imagem antes de ser pedida de novo.
+ *
+ * Um track remoto nasce `muted` e sai disso no primeiro quadro, entao o
+ * limite precisa ser folgado o bastante para uma conexao lenta terminar de
+ * se estabelecer. Dez segundos olhando um retangulo preto ja e tempo demais;
+ * menos que isso derruba conexoes que iam dar certo.
+ */
+const SEM_IMAGEM_MS = 10_000
+/** De quanto em quanto tempo as lives sao conferidas. */
+const VIGIA_INTERVAL_MS = 2_000
+
 /** How often the budget is reconsidered. */
 const GOVERNOR_INTERVAL_MS = 3_000
 /** Healthy samples in a row before asking for more. */
@@ -205,6 +217,9 @@ export class MeshSession {
   /** Consecutive healthy samples per viewer, before asking for more. */
   private readonly streaks = new Map<string, number>()
   private governorTimer: number | null = null
+  private vigiaTimer: number | null = null
+  /** Desde quando a live de alguem esta sem imagem, por peer. */
+  private readonly semImagem = new Map<string, number>()
   private readonly peers = new Map<string, PeerView>()
   readonly mixer = new AudioMixer()
   private readonly listeners = new Set<Listener>()
@@ -305,6 +320,7 @@ export class MeshSession {
       () => this.governUpload(),
       GOVERNOR_INTERVAL_MS
     )
+    this.vigiaTimer = window.setInterval(() => this.vigiarLives(), VIGIA_INTERVAL_MS)
     this.emit()
   }
 
@@ -313,6 +329,11 @@ export class MeshSession {
       window.clearInterval(this.governorTimer)
       this.governorTimer = null
     }
+    if (this.vigiaTimer !== null) {
+      window.clearInterval(this.vigiaTimer)
+      this.vigiaTimer = null
+    }
+    this.semImagem.clear()
     this.budgets.clear()
     this.streaks.clear()
     for (const link of this.allLinks()) link.close()
@@ -674,14 +695,28 @@ export class MeshSession {
         const peer = this.peers.get(peerId)
         if (!peer) return
 
-        // One stream per slot. The slot IS the identity, so the screen can
-        // never end up where the camera belongs.
-        let stream = peer.streams.get(slot)
-        if (!stream) {
-          stream = new MediaStream()
-          peer.streams.set(slot, stream)
+        // Um slot, um track. O slot E a identidade, entao a tela nunca
+        // termina onde a camera deveria estar — e, mais importante, o track
+        // que chega SUBSTITUI o que estava ali.
+        //
+        // Empilhar era o que quebrava a live de quem acabava de entrar.
+        // `answerOffer(fresh)` destroi a RTCPeerConnection anterior, e com
+        // ela todos os tracks que vieram por ela. O MediaStream do slot
+        // sobrevivia a essa troca, entao o track novo entrava AO LADO do
+        // morto. Um <video> toca `getVideoTracks()[0]` — o morto — e fica
+        // preto para sempre, enquanto o audio continuava funcionando porque
+        // o mixer soma todos os tracks e um track morto e silencio.
+        //
+        // Um objeto novo, e nao removeTrack no antigo: os componentes
+        // re-apontam o <video> comparando `srcObject !== stream`, e um
+        // stream que muda por dentro nao dispara essa comparacao.
+        const anterior = peer.streams.get(slot)
+        if (!anterior?.getTracks().includes(track)) {
+          if (anterior && anterior.getTracks().length > 0) {
+            console.warn(`[rtc] ${peerId}: ${slot} chegou de novo, trocando o track anterior`)
+          }
+          peer.streams.set(slot, new MediaStream([track]))
         }
-        if (!stream.getTracks().includes(track)) stream.addTrack(track)
 
         // What is VISIBLE follows the announced state, not the arrival of
         // a track. Fixed slots mean all four transceivers are negotiated at
@@ -949,6 +984,76 @@ export class MeshSession {
   }
 
   /**
+   * Pede o stream de alguem de novo, do zero.
+   *
+   * Derruba SO o lado que recebe. O link que leva a nossa imagem para essa
+   * pessoa nao tem nada a ver com o problema, e fecha-lo faria o conserto de
+   * um lado custar a imagem do outro.
+   *
+   * Os streams guardados vao junto porque eles pertencem a conexao que esta
+   * sendo destruida: mante-los seria guardar tracks mortos, que e exatamente
+   * o que pintava a live de preto.
+   */
+  reconnect(peerId: string): void {
+    const peer = this.peers.get(peerId)
+    if (!peer) return
+
+    this.semImagem.delete(peerId)
+    this.cancelRejoin(peerId)
+    this.cancelJoinRetry(peerId)
+    this.viewers.get(peerId)?.close()
+    this.viewers.delete(peerId)
+    this.earlyCandidates.delete(peerId + ':out')
+
+    peer.streams.clear()
+    peer.screen = null
+    peer.camera = null
+    peer.link = 'connecting'
+    this.emit()
+
+    console.warn(`[rtc] ${peerId}: pedindo o stream de novo`)
+    this.requestStream(peerId)
+  }
+
+  /**
+   * Uma live anunciada que nao chega nao pode ficar assim.
+   *
+   * Um track remoto diz sozinho que nao esta recebendo nada: `muted` e
+   * exatamente isso, e nao depende de ler estatistica nenhuma. Se a pessoa
+   * esta em live, o link esta de pe, e ainda assim nao vem quadro por dez
+   * segundos, nao ha o que esperar — a conexao existe e esta vazia.
+   *
+   * Antes a unica saida era o dono da live fechar e abrir de novo, e para
+   * saber disso alguem tinha que reclamar em voz alta.
+   */
+  private vigiarLives(): void {
+    for (const peer of this.peers.values()) {
+      const id = peer.info.id
+      const faixa = peer.screen?.getVideoTracks()[0] ?? null
+      const parada =
+        peer.watching &&
+        peer.state.screen &&
+        peer.link === 'live' &&
+        (faixa === null || faixa.muted || faixa.readyState === 'ended')
+
+      if (!parada) {
+        this.semImagem.delete(id)
+        continue
+      }
+
+      const desde = this.semImagem.get(id)
+      if (desde === undefined) {
+        this.semImagem.set(id, Date.now())
+        continue
+      }
+      if (Date.now() - desde < SEM_IMAGEM_MS) continue
+
+      console.warn(`[rtc] ${id}: live anunciada e sem imagem ha ${SEM_IMAGEM_MS / 1000}s`)
+      this.reconnect(id)
+    }
+  }
+
+  /**
    * Ask a publisher for its stream, and keep asking.
    *
    * A `join` is one message and a `joinResponse` is another; either can be
@@ -1025,6 +1130,19 @@ export class MeshSession {
   }
 
   private requestStream(peerId: string): void {
+    // Um `join` ja no ar e sem resposta nao se pede de novo.
+    //
+    // A entrada na sala pedia duas vezes para quem estava em live: o laco de
+    // `welcome` pede a quem publica qualquer coisa, e logo depois `watch`
+    // pede outra vez, porque `this.viewers` so existe quando o
+    // `joinResponse` volta. Quem tinha so microfone ou camera nao passava
+    // pelo `watch` e recebia um pedido so — por isso o sintoma era das
+    // lives, e so delas.
+    //
+    // Do outro lado, dois pedidos viram duas conexoes: o guarda de duplicado
+    // do publisher exige 'live' ou 'connecting', e um link recem-criado
+    // ainda esta em 'new'.
+    if (this.joinRetries.has(peerId)) return
     this.cancelRejoin(peerId)
     this.scheduleJoinRetry(peerId)
     // Ask for the picture. Always.

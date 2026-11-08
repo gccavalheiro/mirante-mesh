@@ -1041,6 +1041,15 @@ export function App(): JSX.Element {
           session.watch(peer.info.id)
           return
         }
+        // Clicar de novo em quem esta em live e nao chega e pedir o sinal
+        // outra vez. O vigia ja faz isso sozinho depois de dez segundos;
+        // isto e para quem nao quer esperar dez segundos.
+        if (peer && peer.state.screen) {
+          const faixa = peer.screen?.getVideoTracks()[0] ?? null
+          if (faixa === null || faixa.muted || faixa.readyState === 'ended') {
+            session.reconnect(peer.info.id)
+          }
+        }
         session.focus(peerId)
       }}
       onVolume={(peerId, volume) => session.setPeerAudio(peerId, { volume, muted: false })}
