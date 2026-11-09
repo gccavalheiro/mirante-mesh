@@ -5,6 +5,8 @@ Suba no mirante. Mostra a tela. Assiste junto.
 App desktop para compartilhar tela e câmera ao vivo entre amigos. Mesh P2P — o
 vídeo vai direto de uma máquina para a outra, sem passar por servidor de mídia.
 
+**Desenvolvimento com agentes:** workflow = track **MVP** de [agent-delivery-workflow](https://github.com/edy-rodrigues/agent-delivery-workflow) (`mvp/`), não a v1 da raiz. Ver [AGENTS.md](./AGENTS.md) e [docs/STATUS.md](./docs/STATUS.md).
+
 ---
 
 ## Rodar
